@@ -1,0 +1,151 @@
+params:
+  g_pas0: 4.0e-5
+  celsius:  25.0
+  nao0: 160
+  ko0: 4
+  Ra0: 210
+  cm0: 1
+  v_init: -80.0
+    
+  prox_gbar_Na:  0.04
+  prox_gbar_fKDR: 0.016
+  prox_gbar_sKDR: 0.003
+  prox_gmax_KA: 0.001
+  prox_gmax_KA_scale: 0.05
+
+  prox_gtcabar_Ca: 0.00015
+  prox_gncabar_Ca: 0.002
+  prox_glcabar_Ca: 0.010
+  prox_gbkbar_CadepK: 0.0003
+  prox_gskbar_CadepK: 0.0003
+  prox_gbar_sAHP: 0.0005
+  prox_cac_sAHP: 0.008
+
+  ais_gbar_nax: 0.012
+  ais_gmax_KA: 0.008
+  ais_gbar_fKDR: 0.028
+  ais_sh_nax: 2
+  ais_sha_nax: -5
+
+  hillock_gbar_nax: 0.009
+  hillock_gmax_KA: 0.004
+  hillock_gbar_fKDR: 0.012
+  hillock_sh_nax: 2
+  hillock_sha_nax: -2
+
+  apical_gbar_Na: 0.0005
+  apical_gmax_KA_scale: -0.02
+  apical_gmax_KA_shift: 70
+  apical_gbar_fKDR: 0.002
+  
+  axon_gbar_scale: 0.25
+
+prox:
+  synapses:
+    AMPA:
+      g_unit:
+      - filters:
+          syn_types: [excitatory]
+        origin: soma
+        value: 0.00015
+apical:
+  synapses:
+    AMPA:
+      g_unit:
+#      - filters:
+#          syn_types: [excitatory]
+#        origin: soma
+#        value: 0.00035
+      - filters:
+          syn_types: [excitatory]
+        origin: soma
+#        decay: 0.00175
+#        value: 0.001
+        slope: 5.0e-5
+        tau: 350.0
+        value: 0.0001
+
+    NMDA:
+      g_unit:
+        filters:
+          syn_types: [excitatory]
+        value: 0.036
+        origin: soma
+        decay: 0.01
+        min: 0.0005
+      gVI:
+        - filters:
+            layers: [IML]
+            syn_types: [excitatory]
+          value: 8.502902612167373e-05 # GC_20220926/optimize_selectivity.20220928_025352.yaml
+        - filters:
+            layers: [MML, OML]
+            syn_types: [excitatory]
+          value: 3.767942163406331e-05 # GC_20220926/optimize_selectivity.20220928_025352.yaml
+      tau1_0:
+        filters:
+          syn_types:
+          - excitatory
+        value: 3.531
+      tau2_0:
+        filters:
+          syn_types:
+          - excitatory
+        value: 100.0
+      sh2:
+        filters:
+          syn_types:
+          - excitatory
+        value: 60.5
+      sc2:
+        filters:
+          syn_types:
+          - excitatory
+        value: -0.09
+#      a1:
+#        filters:
+#          syn_types:
+#          - excitatory
+#        value: 0.1
+      tau_D1:
+        - filters:
+            layers: [MML, OML]
+            syn_types:
+            - excitatory
+          value: 185.0
+        - filters:
+            layers: [IML]
+            syn_types:
+            - excitatory
+          value: 176.0
+      tau_F:
+        - filters:
+            layers: [MML, OML]
+            syn_types:
+            - excitatory
+          value: 109.0
+        - filters:
+            layers: [IML]
+            syn_types:
+              - excitatory
+          value: 86.0
+      delta_F:
+        filters:
+          syn_types:
+          - excitatory
+        value: 0.1
+      tau_G1:
+        filters:
+          syn_types:
+          - excitatory
+        value: 2.03
+      tau_G2:
+        filters:
+          syn_types:
+          - excitatory
+        value: 100.0
+      Ginc:
+        filters:
+          syn_types:
+          - excitatory
+        value: 100.0
