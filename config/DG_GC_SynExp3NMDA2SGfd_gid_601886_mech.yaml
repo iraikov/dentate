@@ -52,26 +52,27 @@ apical:
   synapses:
     AMPA:
       g_unit:
-#      - filters:
-#          syn_types: [excitatory]
-#        origin: soma
-#        value: 0.00035
       - filters:
           syn_types: [excitatory]
+          layers: [IML, MML]
         origin: soma
-#        decay: 0.00175
-#        value: 0.001
         slope: 5.0e-5
         tau: 350.0
-        value: 0.0001
+        value: 0.0002
+      - filters:
+          syn_types: [excitatory]
+          layers: [OML]
+        origin: soma
+        slope: 4.0e-5
+        tau: 300.0
+        value: 0.0003
 
     NMDA:
       g_unit:
         filters:
           syn_types: [excitatory]
-        value: 0.036
+        value: 0.029
         origin: soma
-        decay: 0.01
         min: 0.0005
       gVI:
         - filters:
@@ -91,17 +92,17 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 100.0
+        value: 75.0
       sh2:
         filters:
           syn_types:
           - excitatory
-        value: 60.5
+        value: 52.5
       sc2:
         filters:
           syn_types:
           - excitatory
-        value: -0.09
+        value: -0.1
 #      a1:
 #        filters:
 #          syn_types:
@@ -143,7 +144,7 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 100.0
+        value: 30.0
       Ginc:
         filters:
           syn_types:
