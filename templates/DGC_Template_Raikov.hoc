@@ -314,14 +314,14 @@ forsec somaprox {// Somatic and proximal dendrite conductances
         insert Na_Aradi
         gbar_Na_Aradi = prox_gbar_Na
 
-	insert fKDR // Aradi and Holmes (1999) fast and slow KDR channels
-	gbar_fKDR = prox_gbar_fKDR // g_fKDR
+	insert fKDR_Aradi // Aradi and Holmes (1999) fast and slow KDR channels
+	gbar_fKDR_Aradi = prox_gbar_fKDR // g_fKDR
 	
-	insert sKDR
-	gbar_sKDR = prox_gbar_sKDR // g_fKDR
+	insert sKDR_Aradi
+	gbar_sKDR_Aradi = prox_gbar_sKDR // g_sKDR
 
-        insert KA
-        gmax_KA = prox_gmax_KA * prox_gmax_KA_scale
+        insert KA_Aradi
+        gmax_KA_Aradi = prox_gmax_KA * prox_gmax_KA_scale
 
         insert Ca_Aradi
         gtcabar_Ca_Aradi = prox_gtcabar_Ca
@@ -348,14 +348,14 @@ forsec distal {	// dendritic conductances
     insert Na_Aradi
     gbar_Na_Aradi = apical_gbar_Na
       
-    insert KA   				
-    gmax_KA = .01
+    insert KA_Aradi
+    gmax_KA_Aradi = .01
     
     // KA channel with density increasing towards distal dendrite (Kim 2018)
     // Uniform density Na (Kim 2018)
     // low uniform density Kdr (Kim 2018)
-    insert fKDR
-    gbar_fKDR = apical_gbar_fKDR
+    insert fKDR_Aradi
+    gbar_fKDR_Aradi = apical_gbar_fKDR
 
     insert K_conc
     insert Na_conc
@@ -363,7 +363,7 @@ forsec distal {	// dendritic conductances
 }
                      
 
-distribute_distance(distal, "gmax_KA", "(1.0/(1.0 + exp(apical_gmax_KA_scale*(%.17g - apical_gmax_KA_shift))))*prox_gmax_KA", "apical_gmax_KA_scale", apical_gmax_KA_scale, "apical_gmax_KA_shift", apical_gmax_KA_shift, "prox_gmax_KA", prox_gmax_KA)
+distribute_distance(distal, "gmax_KA_Aradi", "(1.0/(1.0 + exp(apical_gmax_KA_scale*(%.17g - apical_gmax_KA_shift))))*prox_gmax_KA", "apical_gmax_KA_scale", apical_gmax_KA_scale, "apical_gmax_KA_shift", apical_gmax_KA_shift, "prox_gmax_KA", prox_gmax_KA)
 
 forsec hillock { // hillock conductances
 
@@ -372,11 +372,11 @@ forsec hillock { // hillock conductances
        sh_nax = hillock_sh_nax
        sha_nax = hillock_sha_nax
          
-       insert fKDR
-       gbar_fKDR = hillock_gbar_fKDR
+       insert fKDR_Aradi
+       gbar_fKDR_Aradi = hillock_gbar_fKDR
 
-       insert KA
-       gmax_KA = hillock_gmax_KA
+       insert KA_Aradi
+       gmax_KA_Aradi = hillock_gmax_KA
 
        insert K_conc
        insert Na_conc
@@ -390,11 +390,11 @@ forsec ais { // AIS conductances
        sh_nax = ais_sh_nax
        sha_nax = ais_sha_nax
          
-       insert fKDR
-       gbar_fKDR = ais_gbar_fKDR
+       insert fKDR_Aradi
+       gbar_fKDR_Aradi = ais_gbar_fKDR
 
-       insert KA
-       gmax_KA = ais_gmax_KA
+       insert KA_Aradi
+       gmax_KA_Aradi = ais_gmax_KA
 
        insert K_conc
        insert Na_conc
@@ -408,11 +408,11 @@ forsec axon {
        sh_nax = ais_sh_nax
        sha_nax = ais_sha_nax
 
-       insert fKDR
-       gbar_fKDR = ais_gbar_fKDR * axon_gbar_scale
+       insert fKDR_Aradi
+       gbar_fKDR_Aradi = ais_gbar_fKDR * axon_gbar_scale
 
-       insert KA
-       gmax_KA = ais_gmax_KA * axon_gbar_scale
+       insert KA_Aradi
+       gmax_KA_Aradi = ais_gmax_KA * axon_gbar_scale
         
        insert K_conc
        insert Na_conc

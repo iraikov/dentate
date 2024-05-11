@@ -4,7 +4,7 @@
 NEURON {
 	SUFFIX fKDR_Aradi
 	USEION k READ ek WRITE ik
-	RANGE gmax, g
+	RANGE gbar, g
 }
 
 UNITS {
@@ -16,7 +16,7 @@ UNITS {
 }
 
 PARAMETER {
-  gmax = 0 (S/cm2)
+  gbar = 0 (S/cm2)
 
 }
 
@@ -38,7 +38,7 @@ INITIAL {
     
 BREAKPOINT {
     SOLVE states METHOD cnexp
-    g = gmax * n^4
+    g = gbar * n^4
     ik = g*(v - ek)
 } 
 
