@@ -7,11 +7,12 @@ params:
   cm0: 1
   v_init: -80.0
     
-  prox_gbar_Na:  0.04
-  prox_gbar_fKDR: 0.016
-  prox_gbar_sKDR: 0.003
+  prox_gbar_Na:  0.029
+  prox_gbar_fKDR: 0.004
+  prox_gbar_sKDR: 0.001
   prox_gmax_KA: 0.001
   prox_gmax_KA_scale: 0.05
+  prox_gkbar_Kir: 0.001
 
   prox_gtcabar_Ca: 0.00015
   prox_gncabar_Ca: 0.002
@@ -33,10 +34,11 @@ params:
   hillock_sh_nax: 2
   hillock_sha_nax: -2
 
-  apical_gbar_Na: 0.0005
+  apical_gbar_Na: 0.0025
   apical_gmax_KA_scale: -0.02
   apical_gmax_KA_shift: 70
-  apical_gbar_fKDR: 0.002
+  apical_gbar_fKDR: 0.0002
+  apical_gkbar_Kir: 0.002
   
   axon_gbar_scale: 0.25
 
@@ -54,35 +56,52 @@ apical:
       g_unit:
       - filters:
           syn_types: [excitatory]
-          layers: [IML, MML]
+          layers: [IML]
         origin: soma
-        slope: 5.0e-5
+        slope: 8.0e-4
         tau: 350.0
         value: 0.0002
       - filters:
           syn_types: [excitatory]
-          layers: [OML]
+          layers: [MML, OML]
         origin: soma
-        slope: 4.0e-5
+        slope: 8.0e-4
         tau: 300.0
-        value: 0.0003
-
+        value: 0.0005
     NMDA:
       g_unit:
         filters:
           syn_types: [excitatory]
-        value: 0.029
+        value: 0.032 # 0.039
+        slope: 6.0e-3
+        tau: 300.0
         origin: soma
         min: 0.0005
+         # - filters:
+         #     syn_types: [excitatory]
+         #     layers: [MML, OML]
+         #   value: 0.035
+         #   slope: 6.0e-3
+         #   tau: 300.0
+         #   origin: soma
+         #   min: 0.0005
+         # - filters:
+         #     syn_types: [excitatory]
+         #     layers: [IML]
+         #   value: 0.024
+         #   slope: 6.0e-3
+         #   tau: 300.0
+         #   origin: soma
+         #   min: 0.0005
       gVI:
         - filters:
             layers: [IML]
             syn_types: [excitatory]
-          value: 8.502902612167373e-05 # GC_20220926/optimize_selectivity.20220928_025352.yaml
+          value: 1.0e-04
         - filters:
             layers: [MML, OML]
             syn_types: [excitatory]
-          value: 3.767942163406331e-05 # GC_20220926/optimize_selectivity.20220928_025352.yaml
+          value: 1.0e-04
       tau1_0:
         filters:
           syn_types:
@@ -97,7 +116,7 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 52.5
+        value: 57.5
       sc2:
         filters:
           syn_types:

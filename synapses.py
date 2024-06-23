@@ -1522,7 +1522,7 @@ def get_syn_filter_dict(env, rules, convert=False, check_valid=True):
     :return: dict
 
     """
-    valid_filter_names = ['syn_types', 'layers', 'sources', 'swc_types']
+    valid_filter_names = ['syn_types', 'layers', 'sources', 'swc_types', 'syn_sections']
     if check_valid:
         for name in rules:
             if name not in valid_filter_names:
@@ -2636,7 +2636,8 @@ def distribute_poisson_synapses(density_seed, syn_type_dict, swc_type_dict, laye
 
 
 def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_dict, layer_dict, sec_layer_density_dict,
-                                          neurotree_dict, cell_sec_dict, cell_secidx_dict, syn_cluster_dict, cluster_syn_count_max=50):
+                                          neurotree_dict, cell_sec_dict, cell_secidx_dict, syn_cluster_dict,
+                                          syn_cluster_centers_dict, cluster_syn_count_max=50):
     """
     Computes synapse locations distributed according to a given
     per-section clustering and Poisson distribution within the
@@ -2666,6 +2667,7 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
     swc_types = []
     syn_index = 0
 
+    
     sec_graph = make_section_graph(neurotree_dict)
 
     debug_flag = False
@@ -2689,8 +2691,9 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
             cluster_syn_ids_count += len(syn_cluster)
 
     syn_cluster_dict = copy.deepcopy(dict(syn_cluster_dict))
+    syn_cluster_centers_dict = copy.deepcopy(dict(syn_cluster_centers_dict))
     sec_syn_count = defaultdict(int)
-    
+    cluster_iter = 0
     while cluster_syn_ids_count > 0:
 
         for (sec_name, layer_density_dict) in viewitems(sec_layer_density_dict):
@@ -2709,14 +2712,25 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
             if len(sec_dict) > 1:
                 sec_subgraph = sec_graph.subgraph(list(sec_dict.keys()))
                 if len(sec_subgraph.edges()) > 0:
+                    #sec_bfs_layers = list(nx.bfs_layers(sec_subgraph, sec_roots))
                     sec_roots = [n for n, d in sec_subgraph.in_degree() if d == 0]
-                    sec_bfs_layers = list(nx.bfs_layers(sec_subgraph, sec_roots))
-                    sec_order = [val for sublist in sec_bfs_layers for val in sublist]
+                    sec_dfs_postorders = list([nx.dfs_postorder_nodes(sec_subgraph, source=root) for root in sec_roots])
+                    seen = set()
+                    sec_order = []
+                    seen_add = seen.add
+                    for sublist in sec_dfs_postorders:
+                        for val in sublist:
+                            if val not in seen:
+                                sec_order.append(val)
+                                seen_add(val)
                 else:
                     sec_order = [idx for idx in list(sec_dict.keys())]
             else:
                 sec_order = [idx for idx in list(sec_dict.keys())]
-            sec_order = sorted(sec_order, key=lambda x: sec_syn_count[x])
+            #if cluster_iter > 0:
+            #    sec_order = sorted(sec_order, key=lambda x: sec_syn_count[x])
+
+            logger.info(f"cluster_iter {cluster_iter}: sec_order = {sec_order}")
             for sec_index, sec in viewitems(sec_dict):
                 seg_list = []
                 if maxdist is None:
@@ -2759,6 +2773,7 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
 
                     current_syn_cluster_type = None
                     current_syn_cluster_id = None
+                    current_syn_cluster_center = None
                     current_cluster_syn_ids = []
                     current_cluster_syn_count = 0
 
@@ -2782,7 +2797,14 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
                                 continue
                             if len(syn_clusters) == 0:
                                 continue
-                            current_syn_cluster_id = r.choice(list(syn_clusters.keys()), size=1)[0]
+                            syn_cluster_choices = list(syn_clusters.keys())
+                            if current_syn_cluster_id in syn_cluster_choices:
+                                syn_cluster_choices.remove(current_syn_cluster_id)
+                            if len(syn_cluster_choices) == 0:
+                                continue
+                                
+                            current_syn_cluster_id = r.choice(syn_cluster_choices, size=1)[0]
+                            current_syn_cluster_center = syn_cluster_centers_dict[current_syn_cluster_id]
                             current_cluster_syn_ids = syn_clusters[current_syn_cluster_id]
                             current_cluster_syn_count = 0
 
@@ -2812,8 +2834,14 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
                                                 del(syn_clusters[current_syn_cluster_id])
                                         if len(syn_clusters) == 0:
                                             break
-                                        current_syn_cluster_id = r.choice(list(syn_clusters.keys()), size=1)[0]
+                                        syn_cluster_choices = list(syn_clusters.keys())
+                                        if current_syn_cluster_id in syn_cluster_choices:
+                                            syn_cluster_choices.remove(current_syn_cluster_id)
+                                        if len(syn_cluster_choices) == 0:
+                                            break
+                                        current_syn_cluster_id = r.choice(syn_cluster_choices, size=1)[0]
                                         current_cluster_syn_ids = syn_clusters[current_syn_cluster_id]
+                                        current_syn_cluster_center = syn_cluster_centers_dict[current_syn_cluster_id]
                                         current_cluster_syn_count = 0
                                 if len(current_cluster_syn_ids) == 0:
                                     break
@@ -2833,7 +2861,315 @@ def distribute_clustered_poisson_synapses(density_seed, syn_type_dict, swc_type_
                             interval -= r.exponential(beta)
 
                     end_distance[sec_index] = (1.0 - syn_loc) * L
+        cluster_iter += 1
+                    
+    assert (len(syn_ids) > 0)
+    syn_dict = {'syn_ids': np.asarray(syn_ids, dtype='uint32'),
+                'syn_locs': np.asarray(syn_locs, dtype='float32'),
+                'syn_cdists': np.asarray(syn_cdists, dtype='float32'),
+                'syn_secs': np.asarray(syn_secs, dtype='uint32'),
+                'syn_layers': np.asarray(syn_layers, dtype='int8'),
+                'syn_types': np.asarray(syn_types, dtype='uint8'),
+                'swc_types': np.asarray(swc_types, dtype='uint8')}
 
+    return (syn_dict, seg_density_per_sec)
+
+
+def distribute_topological_poisson_synapses(density_seed, syn_type_dict, swc_type_dict, layer_dict, sec_layer_density_dict,
+                                            neurotree_dict, cell_sec_dict, cell_secidx_dict, syn_cluster_dict,
+                                            syn_cluster_centers_dict, cluster_syn_count_max=50, random_cluster_choice=False):
+    """
+    Computes synapse locations distributed according to a given
+    per-section clustering and Poisson distribution within the
+    section. Synapses from correlated clusters are organized
+    topologically along the synaptic tree.
+
+    :param cluster_dict:
+    :param density_seed:
+    :param syn_type_dict:
+    :param swc_type_dict:
+    :param layer_dict:
+    :param sec_layer_density_dict:
+    :param neurotree_dict:
+    :param cell_sec_dict:
+    :param cell_secidx_dict:
+    :param verbose:
+    :return:
+
+    """
+    import networkx as nx
+    
+    syn_ids = []
+    syn_locs = []
+    syn_cdists = []
+    syn_secs = []
+    syn_layers = []
+    syn_types = []
+    swc_types = []
+    syn_index = 0
+
+    
+    sec_graph = make_section_graph(neurotree_dict)
+
+    debug_flag = False
+    secnodes_dict = neurotree_dict['section_topology']['nodes']
+
+    for sec, secnodes in viewitems(secnodes_dict):
+        if len(secnodes) < 2:
+            debug_flag = True
+
+    if debug_flag:
+        logger.debug(f'sec_graph: {list(sec_graph.edges)}')
+        logger.debug(f'neurotree_dict: {neurotree_dict}')
+    sec_interp_loc_dict = {}
+    seg_density_per_sec = {}
+    r = np.random.RandomState()
+    r.seed(int(density_seed))
+
+    cluster_syn_ids_count = 0
+    for _, syn_clusters in syn_cluster_dict.items():
+        for _, syn_cluster in syn_clusters.items():
+            cluster_syn_ids_count += len(syn_cluster)
+
+    syn_cluster_dict = copy.deepcopy(dict(syn_cluster_dict))
+    sec_syn_count = defaultdict(int)
+    sec_syn_cluster_center_sum = defaultdict(int)
+    cluster_iter = 0
+    while cluster_syn_ids_count > 0:
+
+        for (sec_name, layer_density_dict) in viewitems(sec_layer_density_dict):
+
+            swc_type = swc_type_dict[sec_name]
+            seg_dict = {}
+            seg_syn_count_dict = {}
+            L_total = 0
+
+            (seclst, maxdist) = cell_sec_dict[sec_name]
+            secidxlst = cell_secidx_dict[sec_name]
+            for sec, idx in zip(seclst, secidxlst):
+                npts_interp = max(int(round(sec.L)), 3)
+                sec_interp_loc_dict[idx] = interplocs(sec, np.linspace(0, 1, npts_interp), return_interpolant=True)
+            sec_dict = {int(idx): sec for sec, idx in zip(seclst, secidxlst)}
+            sec_parents_dict = {}
+            if len(sec_dict) > 1:
+                sec_subgraph = sec_graph.subgraph(list(sec_dict.keys()))
+                for n in sec_subgraph.nodes:
+                    sec_parents_dict[n] = list(sec_subgraph.pred[n].keys())
+                if len(sec_subgraph.edges()) > 0:
+                    #sec_bfs_layers = list(nx.bfs_layers(sec_subgraph, sec_roots))
+                    sec_roots = [n for n, d in sec_subgraph.in_degree() if d == 0]
+                    sec_dfs_preorders = list([nx.dfs_preorder_nodes(sec_subgraph, source=root) for root in sec_roots])
+                    logger.debug(f"sec_roots = {sec_roots}")
+                    seen = set()
+                    sec_order = [list(l) for l in sec_dfs_preorders]
+                else:
+                    sec_order = [[idx for idx in list(sec_dict.keys())]]
+            else:
+                sec_order = [[idx for idx in list(sec_dict.keys())]]
+            #if cluster_iter > 0:
+            #    sec_order = sorted(sec_order, key=lambda x: sec_syn_count[x])
+
+            logger.debug(f"cluster_iter {cluster_iter}: sec_order = {sec_order}")
+            for sec_index, sec in viewitems(sec_dict):
+                seg_list = []
+                if maxdist is None:
+                    for seg in sec:
+                        if seg.x < 1.0 and seg.x > 0.0:
+                            seg_list.append(seg)
+                else:
+                    for seg in sec:
+                        if seg.x < 1.0 and seg.x > 0.0 and ((L_total + sec.L * seg.x) <= maxdist):
+                            seg_list.append(seg)
+                seg_dict[sec_index] = seg_list
+                seg_syn_count_dict[sec_index] = np.zeros((len(seg_list),))
+                L_total += sec.L
+
+            seg_density_dict, layers_dict = \
+                synapse_seg_density(syn_type_dict, layer_dict, \
+                                    layer_density_dict, \
+                                    seg_dict, r, \
+                                    neurotree_dict=neurotree_dict)
+            seg_density_per_sec[sec_name] = seg_density_dict
+            for (syn_type_label, _) in viewitems(layer_density_dict):
+                syn_type = syn_type_dict[syn_type_label]
+                seg_density = seg_density_dict[syn_type]
+                layers = layers_dict[syn_type]
+                end_distance = {}
+                for sec_sublist in sec_order:
+                    for sec_index in sec_sublist:
+
+                        logger.debug(f"processing section {sec_index}")
+                        
+                        interp_loc = sec_interp_loc_dict[sec_index]
+                        seg_list = seg_dict[sec_index]
+                        seg_syn_count = seg_syn_count_dict[sec_index]
+                        sec_seg_layers = layers[sec_index]
+                        sec_seg_density = seg_density[sec_index]
+                        sec_seg_layer_set = set(sec_seg_layers)
+
+                        syn_cluster_match_found = False
+                        
+                        for layer in sec_seg_layer_set:
+                            if (syn_type, swc_type, layer) in syn_cluster_dict:
+                                syn_cluster_match_found = True
+                        if not syn_cluster_match_found:
+                            continue
+
+                        
+                        
+                        current_syn_cluster_type = None
+                        current_syn_cluster_id = None
+                        current_syn_cluster_center = None
+                        current_cluster_syn_ids = []
+                        current_cluster_syn_count = 0
+
+                        sec_parents = sec_parents_dict[sec_index]
+                        current_sec_parent_cluster_mean_center = 0.0
+                        if len(sec_parents) > 0:
+                            for sec_parent_index in sec_parents:
+                                parent_syn_count = sec_syn_count[sec_parent_index]
+                                logger.debug(f"section {sec_index}: parent {sec_parent_index} syn count: {parent_syn_count}")
+                                if parent_syn_count > 0:
+                                    parent_cluster_mean_center = sec_syn_cluster_center_sum[sec_parent_index] / float(parent_syn_count)
+                                    current_sec_parent_cluster_mean_center += parent_cluster_mean_center
+                                    logger.debug(f"section {sec_index}: parent {sec_parent_index} "
+                                                 f"mean cluster center: {parent_cluster_mean_center}")
+                            current_sec_parent_cluster_mean_center /= float(len(sec_parents))
+                        logger.debug(f"section {sec_index}: parent cluster mean center is {current_sec_parent_cluster_mean_center}")
+                            
+                        interval = 0.
+                        syn_loc = 0.
+                        seg_order = np.argsort(seg_syn_count, kind='stable')
+                        for seg_index in seg_order:
+
+                            seg = seg_list[seg_index]
+                            layer = sec_seg_layers[seg_index]
+                            density = sec_seg_density[seg_index]
+
+                            if not density > 0.:
+                                continue
+
+                            if current_syn_cluster_type != (syn_type, swc_type, layer):
+                                current_syn_cluster_type = (syn_type, swc_type, layer)
+                                if current_syn_cluster_type in syn_cluster_dict:
+                                    syn_clusters = syn_cluster_dict[current_syn_cluster_type]
+                                else:
+                                    continue
+                                if len(syn_clusters) == 0:
+                                    continue
+                                syn_cluster_choices = list(syn_clusters.keys())
+                                if current_syn_cluster_id in syn_cluster_choices:
+                                    syn_cluster_choices.remove(current_syn_cluster_id)
+                                if len(syn_cluster_choices) == 0:
+                                    continue
+
+                                syn_cluster_choices_centers = np.asarray([syn_cluster_centers_dict[c]
+                                                                          for c in syn_cluster_choices])
+
+                                current_mean_center = 0.0
+                                if sec_syn_count[sec_index] > 0:
+                                    current_mean_center = sec_syn_cluster_center_sum[sec_index] / float(sec_syn_count[sec_index])
+
+                                cluster_delta = np.abs(current_mean_center - syn_cluster_choices_centers)
+                                logger.debug(f"section {sec_index}: current mean center: {current_mean_center}")
+                                logger.debug(f"section {sec_index}: cluster deltas: {cluster_delta}")
+                                
+                                if random_cluster_choice:
+                                    cluster_delta_inv = 1. / (1. + cluster_delta)
+                                    cluster_prob = cluster_delta_inv / np.sum(cluster_delta_inv)
+
+                                    #logger.debug(f"section {sec_index}: cluster prob: {cluster_prob}")
+                                    
+                                    current_syn_cluster_id = r.choice(syn_cluster_choices,
+                                                                      p=cluster_prob,
+                                                                      replace=False,
+                                                                      size=1)[0]
+                                else:
+                                    current_syn_cluster_id = syn_cluster_choices[np.argmin(cluster_delta)]
+
+                                logger.debug(f"section {sec_index}: selecting cluster {current_syn_cluster_id}"
+                                             f" center is {syn_cluster_centers_dict[current_syn_cluster_id]}")
+
+                                
+                                current_cluster_syn_ids = syn_clusters[current_syn_cluster_id]
+                                current_syn_cluster_center = syn_cluster_centers_dict[current_syn_cluster_id]
+                                current_cluster_syn_count = 0
+
+                            seg_start = seg.x - (0.5 / seg.sec.nseg)
+                            seg_end = seg.x + (0.5 / seg.sec.nseg)
+                            L = seg.sec.L
+                            L_seg_start = seg_start * L
+                            L_seg_end = seg_end * L
+
+                            beta = 1. / density
+                            while True:
+                                sample = r.exponential(beta)
+                                if sample < (L_seg_end - L_seg_start):
+                                    break
+                            interval = L_seg_end - sample
+                            while interval > L_seg_start:
+                                syn_loc = (interval / L)
+                                assert ((syn_loc <= 1) and (syn_loc >= seg_start))
+                                if syn_loc < 1.0:
+                                    if len(current_cluster_syn_ids) == 0 or (current_cluster_syn_count > cluster_syn_count_max):
+                                        while len(current_cluster_syn_ids) == 0:
+                                            if current_syn_cluster_type not in syn_cluster_dict:
+                                                break
+                                            syn_clusters = syn_cluster_dict[current_syn_cluster_type]
+                                            if current_syn_cluster_id is not None:
+                                                if (current_syn_cluster_id in syn_clusters) and (len(syn_clusters[current_syn_cluster_id]) == 0):
+                                                    del(syn_clusters[current_syn_cluster_id])
+                                            if len(syn_clusters) == 0:
+                                                break
+
+                                            
+                                            syn_cluster_choices = list(syn_clusters.keys())
+                                            if current_syn_cluster_id in syn_cluster_choices:
+                                                syn_cluster_choices.remove(current_syn_cluster_id)
+                                            if len(syn_cluster_choices) == 0:
+                                                break
+
+                                            syn_cluster_choices_centers = np.asarray([syn_cluster_centers_dict[c]
+                                                                                      for c in syn_cluster_choices])
+                                            current_mean_center = 0.0
+                                            if sec_syn_count[sec_index] > 0:
+                                                current_mean_center = sec_syn_cluster_center_sum[sec_index] / float(sec_syn_count[sec_index])
+
+                                            cluster_delta = np.abs(current_mean_center - syn_cluster_choices_centers)
+                                            if random_cluster_choice:
+                                                cluster_delta_inv = 1. / (1. + cluster_delta)
+                                                cluster_prob = cluster_delta_inv / np.sum(cluster_delta_inv)
+                                                current_syn_cluster_id = r.choice(syn_cluster_choices,
+                                                                                  p=cluster_prob,
+                                                                                  replace=False,
+                                                                                  size=1)[0]
+                                            else:
+                                                current_syn_cluster_id = syn_cluster_choices[np.argmin(cluster_delta)]
+
+                                            current_cluster_syn_ids = syn_clusters[current_syn_cluster_id]
+                                            current_syn_cluster_center = syn_cluster_centers_dict[current_syn_cluster_id]
+                                            current_cluster_syn_count = 0
+                                    if len(current_cluster_syn_ids) == 0:
+                                        break
+                                    syn_index = current_cluster_syn_ids.pop(0)
+                                    cluster_syn_ids_count -= 1
+                                    current_cluster_syn_count += 1
+                                    syn_cdist = math.sqrt(reduce(lambda a, b: a+b, ( interp_loc[i](syn_loc)**2 for i in range(3) )))
+                                    syn_cdists.append(syn_cdist)
+                                    syn_locs.append(syn_loc)
+                                    syn_ids.append(syn_index)
+                                    syn_secs.append(sec_index)
+                                    syn_layers.append(layer)
+                                    syn_types.append(syn_type)
+                                    swc_types.append(swc_type)
+                                    sec_syn_count[sec_index] += 1
+                                    sec_syn_cluster_center_sum[sec_index] += current_syn_cluster_center
+                                    seg_syn_count[seg_index] += 1
+                                interval -= r.exponential(beta)
+
+                        end_distance[sec_index] = (1.0 - syn_loc) * L
+        cluster_iter += 1
+                    
     assert (len(syn_ids) > 0)
     syn_dict = {'syn_ids': np.asarray(syn_ids, dtype='uint32'),
                 'syn_locs': np.asarray(syn_locs, dtype='float32'),

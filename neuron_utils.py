@@ -418,7 +418,7 @@ def interplocs(sec, locs, return_interpolant=False):
     return res
 
 
-def run_iclamp(cell, record_dt = 0.1, dt = 0.0125, celsius = 36., prelength=1000.0, mainlength=10000.0, stimdur=500.0, stim_amp=0.0001, use_cvode=True):
+def run_iclamp(cell, record_dt = 0.1, dt = 0.0125, celsius = 36., prelength=1000.0, mainlength=2000.0, stimdur=500.0, stim_amp=0.0001, use_cvode=True):
 
     h.cvode.use_fast_imem(1)
     h.cvode.cache_efficient(1)
@@ -455,4 +455,77 @@ def run_iclamp(cell, record_dt = 0.1, dt = 0.0125, celsius = 36., prelength=1000
     t0 = prelength
     t1 = prelength + stimdur
     
-    return { 't0': t0, 't1': t1, 't': t, 'v': v }
+    results = { 't0': t0, 't1': t1, 't': t, 'v': v }
+
+    return results
+
+
+
+def run_vclamp(cell, amps, ts, sec_set=None, density_names=[], rs=0.01, dt=0.025, record_dt=0.01, t_stop=None, v_init=-65., celsius=36):
+
+    # Create the recording vectors for time and voltage
+    vec_t = h.Vector()
+
+    if sec_set is None:
+        sec_set = set([cell.soma])
+    
+    vec_t.record(h._ref_t, record_dt) # Time
+    vec_q_dict = {}
+    vec_v_dict = {}
+    for sec in sec_set:
+        vec_v = h.Vector()
+        vec_v.record(sec(0.5)._ref_v, record_dt) # Voltage
+        vec_v_dict[sec] = vec_v
+        for qname in density_names:
+            if qname not in vec_q_dict:
+                vec_q_dict[qname] = {}
+            if hasattr(sec(0.5), f'_ref_{qname}'):
+                vec_q = h.Vector()
+                vec_q.record(getattr(sec(0.5), f'_ref_{qname}'), record_dt)
+                vec_q_dict[qname][sec] = vec_q
+
+    vclamps = []
+    for sec_i in list(cell.all):
+        #c = h.SEClamp(sec_i(0.5))
+        #c.dur1 = ts[0]
+        #c.dur2 = ts[1]-ts[0]
+        #c.dur3 = ts[2]-ts[1]
+        #c.amp1 = amps[0]
+        #c.amp2 = amps[1]
+        #c.amp3 = amps[2]
+        #c.rs = rs
+        vc = h.VClamp(sec_i(0.5))
+        vc.dur[0] = ts[0]
+        vc.dur[1] = ts[1]-ts[0]
+        vc.dur[2] = ts[2]-ts[1]
+        vc.amp[0] = amps[0]
+        vc.amp[1] = amps[1]
+        vc.amp[2] = amps[2]
+        vc.rstim = rs
+        vclamps.append(vc)
+
+    # Run the Simulation
+    h.dt = dt
+    h.celsius = celsius
+    h.v_init = v_init
+    h.init()
+    h.finitialize(h.v_init)
+
+    if t_stop is None:
+        t_stop = ts[2]
+    h.tstop = t_stop
+
+    h.run()
+
+    results = { 't': np.array(vec_t) }
+    sec_results = { 'v': { sec: np.array(vec_v) for sec, vec_v in vec_v_dict.items() } }
+
+    for qname in density_names:
+        sec_results[f'{qname}'] = { sec: np.array(vec_q_dict[qname][sec])
+                                    for sec in vec_q_dict[qname] }
+
+    results['section quantities'] = sec_results
+                                
+
+    return results
+

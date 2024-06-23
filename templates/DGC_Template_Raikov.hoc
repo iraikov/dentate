@@ -111,6 +111,8 @@ proc parameters() {
      hillock_sh_nax = 0
      hillock_sha_nax = 0
 
+     prox_gkbar_Kir = 0.000353903
+
      prox_gbar_fKDR = .005
      prox_gbar_sKDR = .016
 
@@ -127,6 +129,8 @@ proc parameters() {
      prox_cac_sAHP = 0.025
 
      apical_gbar_Na = 0.018
+
+     apical_gkbar_Kir = 0.000353903
 
      apical_gmax_KA_scale = 0.02
      apical_gmax_KA_shift = 300.0
@@ -159,6 +163,8 @@ proc parameters_from_python() { localobj param_dict
 
     prox_gbar_Na = param_dict.__getitem__("prox_gbar_Na")
 
+    prox_gkbar_Kir = param_dict.__getitem__("prox_gkbar_Kir")
+
     prox_gbar_fKDR = param_dict.__getitem__("prox_gbar_fKDR")
     prox_gbar_sKDR = param_dict.__getitem__("prox_gbar_sKDR")
 
@@ -178,6 +184,7 @@ proc parameters_from_python() { localobj param_dict
     apical_gmax_KA_scale = param_dict.__getitem__("apical_gmax_KA_scale")
     apical_gmax_KA_shift = param_dict.__getitem__("apical_gmax_KA_shift")
     apical_gbar_fKDR = param_dict.__getitem__("apical_gbar_fKDR")
+    apical_gkbar_Kir = param_dict.__getitem__("apical_gkbar_Kir")
     
     ais_sh_nax  = param_dict.__getitem__("ais_sh_nax")
     ais_sha_nax  = param_dict.__getitem__("ais_sha_nax")
@@ -289,6 +296,13 @@ proc subsets_1() { local i, s
 //  Biophysics initialization
 
 proc biophys() {
+    // Kir conductance
+//    Kir_vhalfl_fit_ = -98.923594  		// for Botzman I/V curve, fitted
+//    Kir_kl_fit_     = 10.888538 		// for Botzman I/V curve, fitted
+//    Kir_q10_fit_    = 2.			// temperature factor, set to 1
+//    Kir_vhalft_fit_ = 67.0828           	// 3 values for tau func from Stegen et al. 2011
+//    Kir_at_fit_     = 0.00610779
+//    Kir_bt_fit_     = 0.0817741
 
 forall {
     v = v_init
@@ -323,6 +337,30 @@ forsec somaprox {// Somatic and proximal dendrite conductances
         insert KA_Aradi
         gmax_KA_Aradi = prox_gmax_KA * prox_gmax_KA_scale
 
+        insert Kir21
+        gkbar_Kir21 = prox_gkbar_Kir
+
+		mg_i_Kir21 = 4
+		spm_i_Kir21 = 1
+		gsub_Kir21 = 0.25
+		fac_Kir21 = 0.005
+		vshiftbs_Kir21 = 0
+		vshiftbb_Kir21 = 0
+		b_Kir21 = 0.105
+		shiftmg_Kir21 = 0.5
+		cas_Kir21 = 0.142857
+		As_Kir21 = 0.2
+        
+
+//        insert Kir
+//        gkbar_Kir = prox_gkbar_Kir
+//        vhalfl_Kir = Kir_vhalfl_fit_
+//        kl_Kir     = Kir_kl_fit_
+//        vhalft_Kir = Kir_vhalft_fit_
+//        at_Kir     = Kir_at_fit_
+//        bt_Kir     = Kir_bt_fit_
+//        q10_Kir    = Kir_q10_fit_
+
         insert Ca_Aradi
         gtcabar_Ca_Aradi = prox_gtcabar_Ca
         gncabar_Ca_Aradi = prox_gncabar_Ca
@@ -356,6 +394,30 @@ forsec distal {	// dendritic conductances
     // low uniform density Kdr (Kim 2018)
     insert fKDR_Aradi
     gbar_fKDR_Aradi = apical_gbar_fKDR
+
+    insert Kir21
+    gkbar_Kir21  = apical_gkbar_Kir
+
+		mg_i_Kir21 = 4
+		spm_i_Kir21 = 1
+		gsub_Kir21 = 0.25
+		fac_Kir21 = 0.005
+		vshiftbs_Kir21 = 0
+		vshiftbb_Kir21 = 0
+		b_Kir21 = 0.105
+		shiftmg_Kir21 = 0.5
+		cas_Kir21 = 0.142857
+		As_Kir21 = 0.2
+    
+//    insert Kir
+//    gkbar_Kir  = apical_gkbar_Kir
+//    vhalfl_Kir = Kir_vhalfl_fit_
+//    kl_Kir     = Kir_kl_fit_
+//    vhalft_Kir = Kir_vhalft_fit_
+//    at_Kir     = Kir_at_fit_
+//    bt_Kir     = Kir_bt_fit_
+//    q10_Kir    = Kir_q10_fit_
+
 
     insert K_conc
     insert Na_conc
@@ -427,13 +489,14 @@ forsec axon {
 //  Reinitialization procedure
 
 proc e_pas_init() {
+    v_init_e_pas = -85
 
 forall {
-    v = v_init// all compartments reset Vrest
+    v = v_init_e_pas// all compartments reset Vrest
 }
 
 forsec prox {
-	v = v_init // Redundant resetting of V
+	v = v_init_e_pas // Redundant resetting of V
 	
 	finitialize(v)	// Initialize all variables to V
 	fcurrent()// Generate currents at V
@@ -442,7 +505,7 @@ forsec prox {
 }
 
 forsec axon {
-	v = v_init // Redundant resetting of V
+	v = v_init_e_pas // Redundant resetting of V
 	finitialize(v)
 	fcurrent()
 	e_pas = v + (ina+ik)/g_pas // E_leak
@@ -450,7 +513,7 @@ forsec axon {
 
 
 forsec hillock { // hillock/AIS resetting
-	v = v_init
+	v = v_init_e_pas
 
 	finitialize(v)
 	fcurrent()
@@ -458,7 +521,7 @@ forsec hillock { // hillock/AIS resetting
 }
 
 forsec ais { // hillock/AIS resetting
-	v = v_init
+	v = v_init_e_pas
 
 	finitialize(v)
 	fcurrent()
@@ -466,7 +529,7 @@ forsec ais { // hillock/AIS resetting
 }
 
 forsec distal { // dendrites resetting
-	v = v_init
+	v = v_init_e_pas
 
 	finitialize(v)
 	fcurrent()

@@ -48,12 +48,13 @@ mpi_op_merge_dict = MPI.Op.Create(merge_dict, commute=True)
 @click.option("--cluster-write-size", type=int, default=0)
 @click.option("--cluster-syn-count-max", type=int, default=50)
 @click.option("--attr-gen-cache-size", type=int, default=10)
+@click.option("--cluster-selection-method", "-m", type=str, default='random')
 @click.option("--solver-path", type=str, default=None)
 @click.option("--verbose", "-v", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--debug", is_flag=True)
 def main(config, config_prefix, template_path, output_path, forest_path, synapse_attributes_path, structured_weights_path, synapse_clusters_path, populations, arena_id, io_size, chunk_size, value_chunk_size,
-         write_size, cluster_write_size, cluster_syn_count_max, attr_gen_cache_size, solver_path, verbose, dry_run, debug):
+         write_size, cluster_write_size, cluster_syn_count_max, attr_gen_cache_size, cluster_selection_method, solver_path, verbose, dry_run, debug):
     """
 
     :param config:
@@ -104,6 +105,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
 
     input_rank_namespace = f"Input Rank Structured Weights {arena_id}"
     syn_clusters_namespace = f"Synapse Clusters {arena_id}"
+    syn_cluster_centers_namespace = f"Synapse Cluster Centers {arena_id}"
     
     (pop_ranges, _) = read_population_ranges(forest_path, comm=env.comm)
 
@@ -195,6 +197,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
 
         gids = []
         cell_syn_clusters = {}
+        cell_syn_cluster_centers = {}
 
         input_rank_attr_dict = scatter_read_cell_attributes(structured_weights_path, population,
                                                             namespaces=[input_rank_namespace],
@@ -233,7 +236,8 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
         
         if synapse_clusters_path is not None:
             syn_clusters_attr_dict = scatter_read_cell_attributes(synapse_clusters_path, population,
-                                                                  namespaces=[syn_clusters_namespace],
+                                                                  namespaces=[syn_clusters_namespace,
+                                                                              syn_cluster_centers_namespace],
                                                                   return_type='tuple',
                                                                   comm=env.comm, io_size=io_size,
                                                                   node_allocation=env.node_allocation)
@@ -243,7 +247,15 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
             for this_gid, this_syn_cluster_attr_tuple in syn_clusters_attr_iter:
                 syn_ids = this_syn_cluster_attr_tuple[syn_id_ind]
                 syn_clusters = this_syn_cluster_attr_tuple[syn_cluster_id_ind]
-                cell_syn_clusters[this_gid] = list(zip(syn_ids, syn_clusters))
+                cell_syn_clusters[this_gid] = np.column_stack((syn_ids, syn_clusters))
+                
+            (syn_cluster_centers_attr_iter, syn_cluster_centers_attr_tuple_index) = syn_clusters_attr_dict[syn_cluster_centers_namespace]
+            syn_cluster_id_ind = syn_cluster_centers_attr_tuple_index.get('cluster_id', None)
+            syn_cluster_center_ind = syn_cluster_centers_attr_tuple_index.get('center', None)
+            for this_gid, this_syn_cluster_centers_attr_tuple in syn_cluster_centers_attr_iter:
+                cluster_ids = this_syn_cluster_centers_attr_tuple[syn_cluster_id_ind]
+                centers = this_syn_cluster_centers_attr_tuple[syn_cluster_center_ind]
+                cell_syn_cluster_centers[this_gid] = np.column_stack((cluster_ids, centers))
 
         else:
 
@@ -281,24 +293,39 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
                                     f"cluster centers: {np.sort(np.concatenate(centers))}")
                     logger.info(f'Rank {rank} took {time.time() - local_time:.01f} s to compute clustering for '
                                 f'{num_syns} synapse locations for {population} gid {this_gid}')
-                    cell_syn_clusters[this_gid] = list(zip(syn_ids, clusters))
+                    cell_syn_clusters[this_gid] = np.column_stack((syn_ids, clusters))
+                    cell_syn_cluster_centers[this_gid] = np.column_stack((np.arange(0, len(centers)), centers))
                     updated_cluster_gids.add(this_gid)
 
                 if (not dry_run) and (cluster_write_size > 0) and (i % cluster_write_size == 0):
                     if synapse_clusters_path != output_path:
                         gid_cluster_dict = {}
+                        gid_cluster_center_dict = {}
                         for this_gid in updated_cluster_gids:
-                            syn_ids = cell_syn_clusters[this_gid][0]
-                            cluster_ids = cell_syn_clusters[this_gid][1]
+                            syn_ids = cell_syn_clusters[this_gid][:,0]
+                            cluster_ids = cell_syn_clusters[this_gid][:,1]
                             gid_cluster_dict[this_gid] = { 'syn_id': np.asarray(syn_ids, dtype=np.uint32),
                                                            'cluster_id': np.asarray(cluster_ids, dtype=np.uint16) }
+                            
+                            cluster_ids = cell_syn_cluster_centers[this_gid][:,0]
+                            cluster_centers = cell_syn_cluster_centers[this_gid][:,1]
+                            gid_cluster_center_dict[this_gid] = { 'cluster_id': np.asarray(cluster_ids, dtype=np.uint32),
+                                                                  'center': np.asarray(cluster_centers, dtype=np.float32) }
+                            
                         append_cell_attributes(output_path, population, gid_cluster_dict,
                                                namespace=syn_clusters_namespace,
                                                comm=env.comm, io_size=io_size, 
                                                chunk_size=chunk_size, 
                                                value_chunk_size=value_chunk_size)
+                        if (synapse_clusters_path is None) or (output_path != synapse_clusters_path):
+                            append_cell_attributes(output_path, population, gid_cluster_center_dict,
+                                                   namespace=syn_cluster_centers_namespace,
+                                                   comm=env.comm, io_size=io_size, 
+                                                   chunk_size=chunk_size, 
+                                                   value_chunk_size=value_chunk_size)
                         updated_cluster_gids = set([])
                         gid_cluster_dict = {}
+                        gid_cluster_center_dict = {}
 
                 if debug and i >= 2:
                     break
@@ -306,18 +333,31 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
             if not dry_run:
                  if synapse_clusters_path != output_path:
                      gid_cluster_dict = {}
+                     gid_cluster_center_dict = {}
                      for this_gid in updated_cluster_gids:
-                         syn_ids = cell_syn_clusters[this_gid][0]
-                         cluster_ids = cell_syn_clusters[this_gid][1]
+                         syn_ids = cell_syn_clusters[this_gid][:,0]
+                         cluster_ids = cell_syn_clusters[this_gid][:,1]
                          gid_cluster_dict[this_gid] = { 'syn_id': np.asarray(syn_ids, dtype=np.uint32),
                                                         'cluster_id': np.asarray(cluster_ids, dtype=np.uint16) }
+                         cluster_ids = cell_syn_cluster_centers[this_gid][:,0]
+                         cluster_centers = cell_syn_cluster_centers[this_gid][:,1]
+                         gid_cluster_center_dict[this_gid] = { 'cluster_id': np.asarray(cluster_ids, dtype=np.uint32),
+                                                               'center': np.asarray(cluster_centers, dtype=np.float32) }
+                         
                      append_cell_attributes(output_path, population, gid_cluster_dict,
                                             namespace=syn_clusters_namespace,
                                             comm=env.comm, io_size=io_size, 
                                             chunk_size=chunk_size, 
                                             value_chunk_size=value_chunk_size)
+                     if (synapse_clusters_path is None) or (output_path != synapse_clusters_path):
+                         append_cell_attributes(output_path, population, gid_cluster_center_dict,
+                                                namespace=syn_cluster_centers_namespace,
+                                                comm=env.comm, io_size=io_size, 
+                                                chunk_size=chunk_size, 
+                                                value_chunk_size=value_chunk_size)
                      updated_cluster_gids = set([])
                      gid_cluster_dict = {}
+                     gid_cluster_center_dict = {}
 
         gid_count = 0
         gid_synapse_dict = {}
@@ -345,13 +385,16 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
                         syn_secs.append(syn_sec)
                         
                     logger.info(f"Unclustered synapse sections: {pprint.pformat(np.unique(syn_secs, return_counts=True))}")
-                
+                    
                 
                 if this_gid not in cell_syn_clusters:
                     continue
 
                 syn_clusters = cell_syn_clusters[this_gid]
+                syn_cluster_centers = cell_syn_cluster_centers[this_gid]
+                
                 syn_cluster_dict = {syn_id: cluster_id for syn_id, cluster_id in syn_clusters}
+                syn_cluster_centers_dict = {cluster_id: center for cluster_id, center in syn_cluster_centers}
                 syn_cluster_attrs_dict = defaultdict(lambda: defaultdict(list))
                 num_syns = len(syn_cluster_dict)
                 # Separate out clusters into syn_type, swc_type, layer
@@ -362,13 +405,23 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
                 cell_sec_dict = cell_dicts[this_gid]['sec_dict']
                 cell_secidx_dict = cell_dicts[this_gid]['secidx_dict']
                 cell_morph_dict = cell_dicts[this_gid]['morph_dict']
-            
-                syn_dict, seg_density_per_sec = synapses.distribute_clustered_poisson_synapses(random_seed, env.Synapse_Types,
-                                                                                               env.SWC_Types, env.layers,
-                                                                                               density_config_dict, cell_morph_dict,
-                                                                                               cell_sec_dict, cell_secidx_dict,
-                                                                                               syn_cluster_attrs_dict,
-                                                                                               cluster_syn_count_max=cluster_syn_count_max)
+
+                if cluster_selection_method == 'topological':
+                    syn_dict, seg_density_per_sec = synapses.distribute_topological_poisson_synapses(random_seed, env.Synapse_Types,
+                                                                                                     env.SWC_Types, env.layers,
+                                                                                                     density_config_dict, cell_morph_dict,
+                                                                                                     cell_sec_dict, cell_secidx_dict,
+                                                                                                     syn_cluster_attrs_dict,
+                                                                                                     syn_cluster_centers_dict,
+                                                                                                     cluster_syn_count_max=cluster_syn_count_max)
+                else:
+                    syn_dict, seg_density_per_sec = synapses.distribute_clustered_poisson_synapses(random_seed, env.Synapse_Types,
+                                                                                                   env.SWC_Types, env.layers,
+                                                                                                   density_config_dict, cell_morph_dict,
+                                                                                                   cell_sec_dict, cell_secidx_dict,
+                                                                                                   syn_cluster_attrs_dict,
+                                                                                                   syn_cluster_centers_dict,
+                                                                                                   cluster_syn_count_max=cluster_syn_count_max)
 
                 assert(len(syn_dict['syn_ids']) == num_syns)
                 if debug:

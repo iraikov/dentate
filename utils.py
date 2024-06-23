@@ -669,7 +669,7 @@ class ExplicitDumper(yaml.SafeDumper):
 
 def config_logging(verbose):
     if verbose:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.WARN)
 

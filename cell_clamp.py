@@ -1,4 +1,5 @@
 import os, os.path, itertools, random, sys, uuid, pprint
+from collections import defaultdict
 import numpy as np
 import click
 from scipy import signal
@@ -10,7 +11,7 @@ from dentate import cells, synapses, utils, neuron_utils, io_utils
 from dentate.env import Env
 from dentate.synapses import get_syn_filter_dict
 from dentate.utils import Context, get_module_logger, is_interactive, config_logging
-from dentate.neuron_utils import h, configure_hoc_env, make_rec, run_iclamp
+from dentate.neuron_utils import h, configure_hoc_env, make_rec, run_iclamp, run_vclamp
 
 
 # This logger will inherit its settings from the root logger, created in dentate.env
@@ -812,9 +813,9 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
                                  param=f'i')
                 i_rec_dict[sec].append(i_rec)
                 
+        count += 1
         if syn_count <= count:
             break
-        count += 1
 
     soma = list(biophys_cell.hoc_cell.soma)[0]
     v_soma_rec = make_rec('pspsoma', pop_name, gid, biophys_cell.hoc_cell, sec=soma, dt=env.dt, loc=0.5,
@@ -867,17 +868,208 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
                 f"measure_psp: i_peak = {i_peak} (at t {vec_t[i_peak_index]} ms)\n"
                 f"measure_psp: amp_v = {amp_v} amp_v_soma = {amp_v_soma} amp_i = {amp_i}")
 
-    results = { '%s %s PSP' % (presyn_name, syn_mech_name): np.asarray([amp_v], dtype=np.float32),
-                '%s %s PSP i' % (presyn_name, syn_mech_name): np.asarray(vec_i, dtype=np.float32),
-                '%s %s PSP v' % (presyn_name, syn_mech_name): np.asarray(vec_v, dtype=np.float32),
-                '%s %s PSP v soma' % (presyn_name, syn_mech_name): np.asarray(vec_v_soma, dtype=np.float32),
-                '%s %s PSP t' % (presyn_name, syn_mech_name): np.asarray(vec_t, dtype=np.float32) }
+    prefix = f'{presyn_name} {syn_mech_names}'
+    results = { f'{prefix} PSP': np.asarray([amp_v], dtype=np.float32),
+                f'{prefix} PSP i': np.asarray(vec_i, dtype=np.float32),
+                f'{prefix} PSP v': np.asarray(vec_v, dtype=np.float32),
+                f'{prefix} PSP v soma': np.asarray(vec_v_soma, dtype=np.float32),
+                f'{prefix} PSP t': np.asarray(vec_t, dtype=np.float32) }
 
     env.synapse_attributes.del_syn_id_attr_dict(gid)
     if gid in env.biophys_cells[pop_name]:
         del env.biophys_cells[pop_name][gid]
 
     return  results
+
+
+
+def measure_psc_vclamp (env, gid, pop_name, presyn_name, syn_mech_names, density_names, section_index, v_init, erev, vclamp_holds, syn_layer=None, weight=None, syn_count=1, stim_count=1, stim_interval=5., load_weights=False, cell_dict={}, celsius=35., dt=0.025):
+
+    biophys_cell = init_biophys_cell(env, pop_name, gid, register_cell=False, load_weights=load_weights, cell_dict=cell_dict)
+    synapses.config_biophys_cell_syns(env, gid, pop_name, insert=True, insert_netcons=True, insert_vecstims=True)
+
+    hoc_cell = biophys_cell.hoc_cell
+
+    h.dt = env.dt
+
+    prelength = 200.0
+    stim_start = 50.0
+    mainlength = 250.0
+    postlength = 50.0
+
+    rules = {'sources': [presyn_name] }
+    if len(section_index) > 0:
+        rules['syn_sections'] = np.asarray(section_index)
+    if syn_layer is not None:
+        rules['layers'] = [syn_layer]
+        
+    syn_attrs = env.synapse_attributes
+    syn_filters = get_syn_filter_dict(env, rules=rules, convert=True)
+    syns = syn_attrs.filter_synapses(biophys_cell.gid, **syn_filters)
+
+    logger.info(f"total number of {presyn_name} section {section_index} "
+                f"synapses: {len(syns)}")
+
+    if len(syns) == 0:
+        return {}
+        
+    stimvec = h.Vector()
+
+    for i in range(stim_count):
+        stimvec.append(prelength+stim_start+i*stim_interval)
+
+    target_syn_pps = None
+    v_rec_dict = {}
+    psc_rec_dict = {}
+    origin = list(biophys_cell.hoc_cell.soma)[0]
+    sec_set = set()
+    sec_syn_count = defaultdict(lambda: 0)
+    for target_syn_id, target_syn in iter(syns.items()):
+
+        sec = biophys_cell.hoc_cell.sections[target_syn.syn_section]
+        
+        if sec_syn_count[sec] >= syn_count:
+            continue
+
+        sec_syn_count[sec] += 1
+        sec_set.add(sec)
+        seg = sec(target_syn.syn_loc)
+        syn_distance = h.distance(origin(0.5), seg)
+        logger.info(f"syn_distance = {syn_distance}")
+        for syn_mech_name in syn_mech_names:
+            target_syn_pps = syn_attrs.get_pps(gid, target_syn_id, syn_mech_name)
+            if target_syn_pps is None:
+                raise RuntimeError(f"measure_psc_vclamp: Unable to find {presyn_name} {syn_mech_name} synaptic point process")
+        
+            target_syn_nc = syn_attrs.get_netcon(gid, target_syn_id, syn_mech_name)
+            logger.info(f"{syn_mech_name} target_syn_nc.g_unit = {target_syn_nc.weight[1]}")
+            if weight is not None:
+                target_syn_nc.weight[0] = weight
+            setattr(target_syn_pps, 'e', erev)
+            vs = target_syn_nc.pre()
+            vs.play(stimvec)
+
+        sec = target_syn_pps.get_segment().sec
+        
+        if sec not in v_rec_dict:
+            v_rec = make_rec('psc{str(sec)}', pop_name, gid, biophys_cell.hoc_cell, sec=sec, dt=env.dt, loc=0.5,
+                             param='v')
+            v_rec_dict[sec] = v_rec
+            
+            psc_rec_dict[sec] = {}
+            for syn_mech_name in syn_mech_names:            
+                target_syn_pps = syn_attrs.get_pps(gid, target_syn_id, syn_mech_name)
+                psc_rec = make_rec('psc{str(sec)}_{syn_mech_name}', pop_name, gid, biophys_cell.hoc_cell, ps=target_syn_pps, dt=env.dt,
+                                 param=f'i')
+                psc_rec_dict[sec][syn_mech_name] = psc_rec
+                
+            
+    h.tstop = mainlength + prelength
+    h('objref nil, tlog')
+
+    h.tlog = h.Vector()
+    h.tlog.record (h._ref_t, env.dt)
+
+    all_results = {}
+    for vclamp_hold in vclamp_holds:
+        v_clamp_rest = v_init
+        v_clamp_hold = vclamp_hold
+        V_amp = np.asarray([v_clamp_rest, v_clamp_hold, v_clamp_rest])
+        V_ts  = np.asarray([prelength, prelength+mainlength, prelength+mainlength+postlength])
+
+        vclamp_results = run_vclamp(
+            hoc_cell,
+            V_amp,
+            V_ts,
+            sec_set=sec_set,
+            density_names=density_names,
+            v_init=v_init,
+            dt=dt,
+            celsius=celsius,
+        )
+        vec_t = np.asarray(h.tlog.to_python())
+
+        vec_vs = []
+        vec_syn_is = []
+        vec_syn_is_mech = defaultdict(list)
+        
+        for sec, v_rec in v_rec_dict.items():
+            v_array = np.asarray(v_rec['vec'].to_python())
+            psc_recs = psc_rec_dict[sec]
+            i_arrays = []
+            for syn_mech, psc_rec in psc_recs.items():
+                i_array = np.asarray(psc_rec['vec'].to_python())
+                i_arrays.append(i_array)
+                vec_syn_is_mech[syn_mech].append(i_array)
+            vec_vs.append(v_array)
+            vec_syn_is.append(np.sum(np.vstack(i_arrays), axis=0))
+
+        vec_v_mean = np.mean(np.vstack(vec_vs), axis=0)
+        vec_syn_i_mean = np.mean(np.vstack(vec_syn_is), axis=0)
+        vec_syn_i_var = np.var(np.vstack(vec_syn_is), axis=0)
+    
+        idx = np.argwhere(vec_t >= prelength-1.).reshape((-1,))
+        
+        vec_v_mean = vec_v_mean[idx][1:]
+        vec_t = vec_t[idx][1:]
+        vec_syn_i_mean = vec_syn_i_mean[idx][1:]
+        
+        vec_syn_i_mech_mean = {}
+        for syn_mech_name in vec_syn_is_mech:
+            vec_syn_i_mech_mean[syn_mech_name] = np.mean(np.vstack(vec_syn_is_mech[syn_mech_name]), axis=0)[idx][1:]
+    
+        syn_i_peak_index = np.argmax(np.abs(vec_syn_i_mean))
+        syn_i_peak = vec_syn_i_mean[syn_i_peak_index]
+        v_peak = vec_v_mean[syn_i_peak_index]
+    
+        amp_v = abs(v_peak - vec_v_mean[0])
+        amp_syn_i = abs(syn_i_peak - vec_syn_i_mean[0])
+    
+        logger.info(f"measure_psc_vclamp: v0 = {vec_v_mean[0]} v_peak = {v_peak} (at t {vec_t[syn_i_peak_index]} ms)\n"
+                    f"measure_psc_vclamp: i_peak = {syn_i_peak} (at t {vec_t[syn_i_peak_index]} ms)\n"
+                    f"measure_psc_vclamp: amp_v = {amp_v} amp_i = {amp_syn_i}")
+
+        prefix = f'{presyn_name} {syn_mech_names}'
+        results = { f'{prefix} PSP': np.asarray([amp_v], dtype=np.float32),
+                    f'{prefix} PSC i mean': np.asarray(vec_syn_i_mean, dtype=np.float32),
+                    f'{prefix} PSC i variance': np.asarray(vec_syn_i_var, dtype=np.float32),
+                    f'{prefix} PSC v': np.asarray(vec_v_mean, dtype=np.float32),
+                    f'{prefix} PSC t': np.asarray(vec_t, dtype=np.float32) }
+
+        for syn_mech_name in vec_syn_i_mech_mean:
+            results[f'{prefix} PSC i_{syn_mech_name}'] = np.asarray(vec_syn_i_mech_mean[syn_mech_name], dtype=np.float32)
+    
+        vclamp_vec_t = vclamp_results['t']
+        idx = np.argwhere(vclamp_vec_t >= prelength-1.).reshape((-1,))
+        all_qv_dict = {}
+        for q, sec_v_dict in vclamp_results['section quantities'].items():
+            for sec, v in sec_v_dict.items():
+                vec = v[idx]
+                if q in all_qv_dict:
+                    all_qv_dict[q].append(np.asarray(vec, dtype=np.float32))
+                else:
+                    all_qv_dict[q] = [np.asarray(vec, dtype=np.float32)]
+        for q, v_list in all_qv_dict.items():
+            v_array = np.vstack(v_list)
+            with np.errstate(under='ignore'):
+                results[f'{prefix} vclamp {q} mean'] = np.mean(v_array, axis=0)
+                results[f'{prefix} vclamp {q} variance'] = np.var(v_array, axis=0)
+        results[f'{prefix} vclamp t'] = np.asarray(vclamp_vec_t[idx], dtype=np.float32)
+
+        for k, v in results.items():
+            if k in all_results:
+                all_results[k].append(v)
+            else:
+                all_results[k] = [v]
+
+
+    results_dict = { k: np.concatenate(vs) for k, vs in all_results.items() }
+    
+    env.synapse_attributes.del_syn_id_attr_dict(gid)
+    if gid in env.biophys_cells[pop_name]:
+        del env.biophys_cells[pop_name][gid]
+
+    return results_dict
 
     
 
@@ -886,12 +1078,13 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
 @click.option("--config-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='config',
               help='path to directory containing network and cell mechanism config files')
+@click.option("--density-name", '-d', required=False, type=str, multiple=True, help='density mechanism quantities to record from')
 @click.option("--erev", type=float, help='synaptic reversal potential')
 @click.option("--population", '-p', required=True, type=str, default='GC', help='target population')
 @click.option("--presyn-name", type=str, help='presynaptic population')
 @click.option("--gid", '-g', required=True, type=int, default=0, help='target cell gid')
 @click.option("--load-weights", '-w', is_flag=True)
-@click.option("--measurements", '-m', type=str, default="passive,fi,ap,ap_rate", help='measurements to perform')
+@click.option("--measurements", '-m', type=str, default="passive,fi,ap,ap_rate,psp", help='measurements to perform')
 @click.option("--template-paths", type=str, required=True,
               help='colon-separated list of paths to directories containing hoc cell templates')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -906,18 +1099,20 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
 @click.option("--syn-mech-name", type=str, multiple=True, help='synaptic mechanism name')
 @click.option("--syn-weight", type=float, help='synaptic weight')
 @click.option("--syn-count", type=int, default=1, help='synaptic count')
-@click.option("--swc-type", type=str, help='synaptic swc type')
 @click.option("--syn-layer", type=str, help='synaptic layer name')
+@click.option("--swc-type", type=str, help='synaptic swc type')
+@click.option("--section-index", type=int, multiple=True, help='vclamp section index')
 @click.option("--stim-amp", type=float, default=0.1, help='current stimulus amplitude (nA)')
-@click.option("--stim-count", type=int, default=1, help='number of stimuli for PSP experiment')
-@click.option("--stim-interval", type=float, default=1.0, help='interval between stimuli for PSP experiment')
+@click.option("--stim-count", type=int, default=1, help='number of stimuli for PSP/PSC experiment')
+@click.option("--stim-interval", type=float, default=1.0, help='interval between stimuli for PSP/PSC experiment')
 @click.option("--stim-amp", type=float, default=0.1, help='current stimulus amplitude (nA)')
 @click.option("--v-init", type=float, default=-75.0, help='initialization membrane potential (mV)')
+@click.option("--vclamp-hold", type=float, multiple=True, help='command voltage for voltage clamp')
 @click.option("--dt", type=float, default=0.025, help='simulation timestep (ms)')
 @click.option("--use-cvode", is_flag=True)
 @click.option("--verbose", '-v', is_flag=True)
 
-def main(config, config_prefix, erev, population, presyn_name, gid, load_weights, measurements, template_paths, dataset_prefix, results_path, results_file_id, results_namespace_id, syn_distance_range, syn_mech_name, syn_weight, syn_count, syn_layer, swc_type, stim_amp, stim_count, stim_interval, v_init, dt, use_cvode, verbose):
+def main(config, config_prefix, density_name, erev, population, presyn_name, gid, load_weights, measurements, template_paths, dataset_prefix, results_path, results_file_id, results_namespace_id, syn_distance_range, syn_mech_name, syn_weight, syn_count, syn_layer, swc_type, section_index, stim_amp, stim_count, stim_interval, v_init, vclamp_hold, dt, use_cvode, verbose):
 
     config_logging(verbose)
         
@@ -959,12 +1154,24 @@ def main(config, config_prefix, erev, population, presyn_name, gid, load_weights
                                            stim_count=stim_count, stim_interval=stim_interval,
                                            weight=syn_weight, load_weights=load_weights,
                                            distance_range=syn_distance_range))
+    if 'psc_vclamp' in measurements:
+        assert(presyn_name is not None)
+        assert(syn_mech_name is not None)
+        assert(erev is not None)
+        results_dict = measure_psc_vclamp (env, gid, population, presyn_name, syn_mech_name,
+                                           density_name, section_index, 
+                                           v_init, erev, vclamp_hold, syn_layer=syn_layer, syn_count=syn_count, 
+                                           stim_count=stim_count, stim_interval=stim_interval,
+                                           weight=syn_weight, load_weights=load_weights)
 
-    if results_path is not None:
+        
+        attr_dict[gid].update(results_dict)
+
+    if results_path is not None and len(attr_dict[gid]) > 0:
         append_cell_attributes(env.results_file_path, population, attr_dict,
                                namespace=env.results_namespace_id,
                                comm=env.comm, io_size=env.io_size)
-        
+        logger.info(f"results saved to file {env.results_file_path}")
     
 
 if __name__ == '__main__':
