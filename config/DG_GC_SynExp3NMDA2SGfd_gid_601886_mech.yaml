@@ -72,7 +72,7 @@ apical:
       g_unit:
         filters:
           syn_types: [excitatory]
-        value: 0.032 # 0.039
+        value: 0.034 # 0.039
         slope: 6.0e-3
         tau: 300.0
         origin: soma
