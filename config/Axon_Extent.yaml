@@ -18,6 +18,9 @@ MC:
   IML:
     width:  [5000., 4000.]
     offset: [750., 0.]
+  GCL:
+    width:  [1500., 1500.]
+    offset: [0., 0.]
   Hilus:
     width:  [1500., 1500.]
     offset: [0., 0.]
@@ -119,6 +122,9 @@ CA3c:
 ConMC:
   IML:
     width:  [5000., 4000.]
+    offset: [0., 0.]
+  GCL:
+    width:  [1500., 1500.]
     offset: [0., 0.]
   Hilus:
     width:  [1500., 1500.]

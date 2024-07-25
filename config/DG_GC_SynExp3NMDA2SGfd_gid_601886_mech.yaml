@@ -12,7 +12,6 @@ params:
   prox_gbar_sKDR: 0.001
   prox_gmax_KA: 0.001
   prox_gmax_KA_scale: 0.05
-  prox_gkbar_Kir: 0.001
 
   prox_gtcabar_Ca: 0.00015
   prox_gncabar_Ca: 0.002
@@ -42,66 +41,34 @@ params:
   
   axon_gbar_scale: 0.25
 
-prox:
-  synapses:
-    AMPA:
-      g_unit:
-      - filters:
-          syn_types: [excitatory]
-        origin: soma
-        value: 0.00015
+spike detector:
+  section: axon
+  loc: 0.5
+  threshold: -40
+  delay: 0.05
+  onset delay: 0.0
+  distance: 50.0
+  
 apical:
   synapses:
     AMPA:
       g_unit:
       - filters:
           syn_types: [excitatory]
-          layers: [IML]
         origin: soma
-        slope: 8.0e-4
-        tau: 350.0
-        value: 0.0002
-      - filters:
-          syn_types: [excitatory]
-          layers: [MML, OML]
-        origin: soma
-        slope: 8.0e-4
+        slope: 1.0e-3
         tau: 300.0
-        value: 0.0005
+        value: 0.0003
     NMDA:
       g_unit:
         filters:
           syn_types: [excitatory]
-        value: 0.034 # 0.039
-        slope: 6.0e-3
-        tau: 300.0
+        value: 0.041 # 0.039
         origin: soma
-        min: 0.0005
-         # - filters:
-         #     syn_types: [excitatory]
-         #     layers: [MML, OML]
-         #   value: 0.035
-         #   slope: 6.0e-3
-         #   tau: 300.0
-         #   origin: soma
-         #   min: 0.0005
-         # - filters:
-         #     syn_types: [excitatory]
-         #     layers: [IML]
-         #   value: 0.024
-         #   slope: 6.0e-3
-         #   tau: 300.0
-         #   origin: soma
-         #   min: 0.0005
       gVI:
-        - filters:
-            layers: [IML]
-            syn_types: [excitatory]
-          value: 1.0e-04
-        - filters:
-            layers: [MML, OML]
-            syn_types: [excitatory]
-          value: 1.0e-04
+        filters:
+          syn_types: [excitatory]
+        value: 0.00025
       tau1_0:
         filters:
           syn_types:
@@ -116,12 +83,12 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 57.5
+        value: 58.5
       sc2:
         filters:
           syn_types:
           - excitatory
-        value: -0.1
+        value: -0.13
 #      a1:
 #        filters:
 #          syn_types:
@@ -163,7 +130,7 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 30.0
+        value: 34.0
       Ginc:
         filters:
           syn_types:

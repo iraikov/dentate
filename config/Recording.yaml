@@ -87,14 +87,43 @@ Intracellular:
           - soma
           - hillock
           - ais
+          - axon
           - apical
           - basal
       g_Na_Aradi:
         swc types:
           - apical
-#      gk_Kir:
-#        swc types:
-#          - apical
+      gk_Kir21:
+        swc types:
+          - apical
+      g_fKDR_Aradi:
+        swc types:
+          - apical
+      g_KA_Aradi:
+        swc types:
+          - apical
+    synaptic quantity:
+      i:
+        syn types:
+          - excitatory
+  Network clamp soma apical g exc synaptic:
+    dt: 0.1
+    reduce: True
+    section quantity:
+      v:
+        swc types:
+          - soma
+          - hillock
+          - ais
+          - axon
+          - apical
+          - basal
+      g_Na_Aradi:
+        swc types:
+          - apical
+      gk_Kir21:
+        swc types:
+          - apical
       g_fKDR_Aradi:
         swc types:
           - apical

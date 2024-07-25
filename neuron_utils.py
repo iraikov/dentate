@@ -279,7 +279,7 @@ def load_cell_template(env, pop_name, bcast_template=False):
     return template_class
 
 
-def make_rec(recid, population, gid, cell, sec=None, loc=None, ps=None, param='v', label=None, dt=None, description=''):
+def make_rec(recid, population, gid, cell, sec=None, loc=None, ps=None, param='v', label=None, dt=None, description='', raise_error=True):
     """
     Makes a recording vector for the specified quantity in the specified section and location.
 
@@ -329,23 +329,26 @@ def make_rec(recid, population, gid, cell, sec=None, loc=None, ps=None, param='v
                 break
     if label is None:
         label = param
-    if dt is None:
-        vec.record(getattr(hocobj, f'_ref_{param}'))
-    else:
-        vec.record(getattr(hocobj, f'_ref_{param}'), dt)
-    rec_dict = {'name': recid,
-                'gid': gid,
-                'cell': cell,
-                'population': population,
-                'loc': loc,
-                'section': section_index,
-                'distance': distance,
-                'ri': ri,
-                'description': description,
-                'vec': vec,
-                'label': label
-                }
-
+    rec_dict = None
+    if hasattr(hocobj, f'_ref_{param}'):
+        if dt is None:
+            vec.record(getattr(hocobj, f'_ref_{param}'))
+        else:
+            vec.record(getattr(hocobj, f'_ref_{param}'), dt)
+        rec_dict = {'name': recid,
+                    'gid': gid,
+                    'cell': cell,
+                    'population': population,
+                    'loc': loc,
+                    'section': section_index,
+                    'distance': distance,
+                    'ri': ri,
+                    'description': description,
+                    'vec': vec,
+                    'label': label
+                    }
+    elif raise_error:
+        raise RuntimeError(f'make_rec: quantity {param} not found in object {hocobj}')
     return rec_dict
 
 

@@ -126,7 +126,8 @@ def init_biophys_cell(env, pop_name, gid, load_synapses=True, load_weights=True,
         
     cells.init_biophysics(cell, reset_cable=True, 
                           correct_cm=correct_for_spines_flag,
-                          correct_g_pas=correct_for_spines_flag, env=env)
+                          correct_g_pas=correct_for_spines_flag,
+                          env=env)
     synapses.init_syn_mech_attrs(cell, env)
 
     phenotype_dict = env.phenotype_dict.get(pop_name, {})
@@ -275,7 +276,7 @@ def fit_membrane_time_constant(t, v, t0, t1, rmse_max_tol = 1.0):
     try:
         popt, pcov = curve_fit(exp_curve, t_window, v_window, p0=p0)
     except RuntimeError:
-        logging.info("Curve fit for membrane time constant failed")
+        logger.info("Curve fit for membrane time constant failed")
         return np.nan, np.nan, np.nan
 
     pred = exp_curve(t_window, *popt)
@@ -352,7 +353,7 @@ def measure_time_constant(t, v, t0, t1, stim_amp, frac=0.1, baseline_interval=10
 
 
 
-def measure_passive (gid, pop_name, v_init, env, prelength=1000.0, mainlength=3000.0, stimdur=1000.0, stim_amp=-0.1, cell_dict={}):
+def measure_passive (gid, pop_name, v_init, env, prelength=1000.0, mainlength=3000.0, stimdur=1000.0, stim_amp=-0.01, cell_dict={}):
 
 
     biophys_cell = init_biophys_cell(env, pop_name, gid, register_cell=False, cell_dict=cell_dict)
@@ -757,7 +758,7 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
 
     rules = {'sources': [presyn_name]}
     if swc_type is not None:
-        rules['swc_types'] = [swc_type]
+        rules['swc_types'] = swc_type
     if syn_layer is not None:
         rules['layers'] = [syn_layer]
     syn_attrs = env.synapse_attributes
@@ -1072,6 +1073,51 @@ def measure_psc_vclamp (env, gid, pop_name, presyn_name, syn_mech_names, density
     return results_dict
 
     
+def measure_transfer_impedance (gid, pop_name, v_init, env, cell_dict={}, swc_types=[], transfer_impedance_freq=10):
+    if len(swc_types) == 0:
+        swc_types = ("soma","apical")
+        
+    biophys_cell = init_biophys_cell(env, pop_name, gid, register_cell=False, cell_dict=cell_dict)
+    hoc_cell = biophys_cell.hoc_cell
+    cells.report_topology(biophys_cell, env)
+    h.finitialize(v_init)
+
+    soma_sec = list(hoc_cell.soma)[0]
+    apical_list = list(hoc_cell.apical)
+
+    transfer_impedance_list = []
+    for swc_type in swc_types:
+        if hasattr(hoc_cell, swc_type):
+            sections = list(getattr(hoc_cell, swc_type))
+            transfer_impedance_list.extend(sections)
+            
+    N = len(transfer_impedance_list)
+    transfer_impedance_matrix = np.zeros((N, N))
+
+    for i in range(N):
+        imp = h.Impedance()
+        imp.loc(0.5, sec=transfer_impedance_list[i])
+        imp.compute(transfer_impedance_freq)
+        logger.info(f"computing impedance in section {transfer_impedance_list[i]}")
+        for j in range(N):
+            if i == j:
+                continue
+            z = imp.transfer(0.5, sec=transfer_impedance_list[j])
+            logger.info(f"transfer impedance between section {transfer_impedance_list[i]} and {transfer_impedance_list[j]} is {z}")
+            transfer_impedance_matrix[j][i] = z
+
+    results = {'transfer impedance': np.asarray(transfer_impedance_matrix.flat, dtype=np.float32), }
+
+    h.topology()
+    for sec in transfer_impedance_list:
+        h.psection(sec=sec)
+
+    env.synapse_attributes.del_syn_id_attr_dict(gid)
+    if gid in env.biophys_cells[pop_name]:
+        del env.biophys_cells[pop_name][gid]
+
+    return results
+    
 
 @click.command()
 @click.option("--config", '-c', required=True, type=str, help='model configuration file name')
@@ -1084,7 +1130,7 @@ def measure_psc_vclamp (env, gid, pop_name, presyn_name, syn_mech_names, density
 @click.option("--presyn-name", type=str, help='presynaptic population')
 @click.option("--gid", '-g', required=True, type=int, default=0, help='target cell gid')
 @click.option("--load-weights", '-w', is_flag=True)
-@click.option("--measurements", '-m', type=str, default="passive,fi,ap,ap_rate,psp", help='measurements to perform')
+@click.option("--measurements", '-m', type=str, default="passive,fi,ap,ap_rate,psp,psc_vclamp,transfer_impedance", help='measurements to perform')
 @click.option("--template-paths", type=str, required=True,
               help='colon-separated list of paths to directories containing hoc cell templates')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -1100,19 +1146,20 @@ def measure_psc_vclamp (env, gid, pop_name, presyn_name, syn_mech_names, density
 @click.option("--syn-weight", type=float, help='synaptic weight')
 @click.option("--syn-count", type=int, default=1, help='synaptic count')
 @click.option("--syn-layer", type=str, help='synaptic layer name')
-@click.option("--swc-type", type=str, help='synaptic swc type')
+@click.option("--swc-type", type=str, multiple=True, help='synaptic swc type')
 @click.option("--section-index", type=int, multiple=True, help='vclamp section index')
 @click.option("--stim-amp", type=float, default=0.1, help='current stimulus amplitude (nA)')
 @click.option("--stim-count", type=int, default=1, help='number of stimuli for PSP/PSC experiment')
 @click.option("--stim-interval", type=float, default=1.0, help='interval between stimuli for PSP/PSC experiment')
 @click.option("--stim-amp", type=float, default=0.1, help='current stimulus amplitude (nA)')
+@click.option("--impedance-freq", type=float, default=1.0, help='impedance frequency (Hz)')
 @click.option("--v-init", type=float, default=-75.0, help='initialization membrane potential (mV)')
 @click.option("--vclamp-hold", type=float, multiple=True, help='command voltage for voltage clamp')
 @click.option("--dt", type=float, default=0.025, help='simulation timestep (ms)')
 @click.option("--use-cvode", is_flag=True)
 @click.option("--verbose", '-v', is_flag=True)
 
-def main(config, config_prefix, density_name, erev, population, presyn_name, gid, load_weights, measurements, template_paths, dataset_prefix, results_path, results_file_id, results_namespace_id, syn_distance_range, syn_mech_name, syn_weight, syn_count, syn_layer, swc_type, section_index, stim_amp, stim_count, stim_interval, v_init, vclamp_hold, dt, use_cvode, verbose):
+def main(config, config_prefix, density_name, erev, population, presyn_name, gid, load_weights, measurements, template_paths, dataset_prefix, results_path, results_file_id, results_namespace_id, syn_distance_range, syn_mech_name, syn_weight, syn_count, syn_layer, swc_type, section_index, stim_amp, stim_count, stim_interval, impedance_freq, v_init, vclamp_hold, dt, use_cvode, verbose):
 
     config_logging(verbose)
         
@@ -1164,6 +1211,13 @@ def main(config, config_prefix, density_name, erev, population, presyn_name, gid
                                            stim_count=stim_count, stim_interval=stim_interval,
                                            weight=syn_weight, load_weights=load_weights)
 
+        
+        attr_dict[gid].update(results_dict)
+
+    if 'transfer_impedance' in measurements:
+        results_dict = measure_transfer_impedance (gid, population, v_init, env,
+                                                   swc_types=swc_type,
+                                                   transfer_impedance_freq=impedance_freq)
         
         attr_dict[gid].update(results_dict)
 

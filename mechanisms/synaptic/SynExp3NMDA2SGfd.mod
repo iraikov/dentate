@@ -165,10 +165,10 @@ INITIAL {
 
 }
 
-BREAKPOINT {
+BREAKPOINT { LOCAL m
 	SOLVE state METHOD derivimplicit
 
-	i = (B - A)*(gVI + gVD)*Mgblock(v)*(v - e)
+	i = (B - A)*(gVI + gVD)*(v - e)
 }
 
 DERIVATIVE state { LOCAL x
@@ -180,17 +180,18 @@ DERIVATIVE state { LOCAL x
 	gVD' = (inf-gVD)/tau
     }
     
-NET_RECEIVE(weight, g_unit (uS), wf, f, d1, t0 (ms), G1, G2) { LOCAL d
+NET_RECEIVE(weight, g_unit (uS), wf, f, d1, t0 (ms), G1, G2) { LOCAL d, m
         INITIAL {
             d1 = 1
             f  = 1
             G1 = 0
-            G2 = 0
+            G2 = Ginc*Mgblock(v)
             t0 = 0
         }
         d1 = 1 - (1 - d1)*exp(-(t - t0)/tau_D1)
         f = 1 + (f - 1)*exp(-(t - t0)/tau_F)
 
+        :printf("at t %g: before: v = %g Ginc = %g m = %g G1 = %g G2 = %g\n", t, v, Ginc, m, G1, G2)
         G1 = G1*exp(-(t-t0)/tau_G1)
         G2 = G2*exp(-(t-t0)/tau_G2)
         G1 = G1 + Ginc*Gfactor
@@ -198,7 +199,8 @@ NET_RECEIVE(weight, g_unit (uS), wf, f, d1, t0 (ms), G1, G2) { LOCAL d
 
         t0 = t
 
-        wf  = weight*g_unit*factor*d1*f*(G2 - G1)
+        wf = weight*g_unit*Mgblock(v)*factor*d1*f*(G2 - G1)
+        :printf("at t %g: v = %g Ginc = %g m = %g d1 = %g f = %g G1 = %g G2 = %g wf = %g\n", t, v, Ginc, m, d1, f, G1, G2, wf)
 
 	A = A + wf
 	B = B + wf

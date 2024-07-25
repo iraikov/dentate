@@ -84,7 +84,8 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
         structured_weights_path = forest_path
         
     env = Env(comm=comm, config=config, config_prefix=config_prefix, template_paths=template_path)
-
+    env.data_file_path = forest_path
+    env.load_celltypes()
     configure_hoc_env(env)
     
     if io_size == -1:
@@ -114,8 +115,10 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
         
         logger.info('Rank %i population: %s' % (rank, population))
         (population_start, _) = pop_ranges[population]
-        template_class = load_cell_template(env, population, bcast_template=True)
+        mech_dict = env.celltypes[population].get('mech_dict', {})
+        template_param_dict = mech_dict.get("params", {})
 
+        template_class = load_cell_template(env, population, bcast_template=True)
         projection_config = env.connection_config[population]
         projection_synapse_dict = {env.Populations[source_population]:
                                    (projection_config[source_population].type,
@@ -131,8 +134,10 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
 
         trees, _ = scatter_read_trees(forest_path, population, topology=True, comm=env.comm, io_size=io_size)
         for this_gid, this_morph_dict in trees:
+            
             morph_dict = this_morph_dict
-            cell = cells.make_neurotree_hoc_cell(template_class, neurotree_dict=morph_dict, gid=this_gid)
+            cell = cells.make_neurotree_hoc_cell(template_class, neurotree_dict=morph_dict, gid=this_gid,
+                                                 param_dict=template_param_dict)
 
             cell_sec_dict = {'apical': (cell.apical, None), 
                              'basal': (cell.basal, None), 
@@ -154,7 +159,6 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
 
         env.comm.barrier()
 
-
         syn_ids_ind = None
         syn_locs_ind = None
         syn_layers_ind = None
@@ -173,7 +177,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
                                                node_allocation=env.node_allocation)
 
         for this_gid, this_syn_attrs in synapses_attr_gen:
-
+            
             if this_gid is not None:
                 (attr_tuple, attr_tuple_index) = this_syn_attrs
                 if syn_ids_ind is None:
@@ -407,7 +411,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
                 cell_morph_dict = cell_dicts[this_gid]['morph_dict']
 
                 if cluster_selection_method == 'topological':
-                    syn_dict, seg_density_per_sec = synapses.distribute_topological_poisson_synapses(random_seed, env.Synapse_Types,
+                    syn_dict, seg_density_per_sec = synapses.distribute_topological_poisson_synapses(this_gid, random_seed, env.Synapse_Types,
                                                                                                      env.SWC_Types, env.layers,
                                                                                                      density_config_dict, cell_morph_dict,
                                                                                                      cell_sec_dict, cell_secidx_dict,

@@ -105,13 +105,12 @@ proc parameters() {
      // Conductance properties
 
      prox_gbar_Na = 0.03
+     prox_sh_Na = 0.0
      ais_sh_nax = 0
      ais_sha_nax = 0
 
      hillock_sh_nax = 0
      hillock_sha_nax = 0
-
-     prox_gkbar_Kir = 0.000353903
 
      prox_gbar_fKDR = .005
      prox_gbar_sKDR = .016
@@ -129,6 +128,7 @@ proc parameters() {
      prox_cac_sAHP = 0.025
 
      apical_gbar_Na = 0.018
+     apical_sh_Na = 0.0
 
      apical_gkbar_Kir = 0.000353903
 
@@ -162,8 +162,7 @@ proc parameters_from_python() { localobj param_dict
     g_pas0 = param_dict.__getitem__("g_pas0")
 
     prox_gbar_Na = param_dict.__getitem__("prox_gbar_Na")
-
-    prox_gkbar_Kir = param_dict.__getitem__("prox_gkbar_Kir")
+    prox_sh_Na = param_dict.__getitem__("prox_sh_Na")
 
     prox_gbar_fKDR = param_dict.__getitem__("prox_gbar_fKDR")
     prox_gbar_sKDR = param_dict.__getitem__("prox_gbar_sKDR")
@@ -180,6 +179,7 @@ proc parameters_from_python() { localobj param_dict
     prox_cac_sAHP = param_dict.__getitem__("prox_cac_sAHP")
     
     apical_gbar_Na = param_dict.__getitem__("apical_gbar_Na")
+    apical_sh_Na = param_dict.__getitem__("apical_sh_Na")
     
     apical_gmax_KA_scale = param_dict.__getitem__("apical_gmax_KA_scale")
     apical_gmax_KA_shift = param_dict.__getitem__("apical_gmax_KA_shift")
@@ -235,6 +235,7 @@ proc celldef() {
     subsets_1()
     biophys()
     geom_nseg_1()
+    //geom_rescale()
     e_pas_init()
 }
 
@@ -327,39 +328,17 @@ forsec somaprox {// Somatic and proximal dendrite conductances
 
         insert Na_Aradi
         gbar_Na_Aradi = prox_gbar_Na
+        sh_Na_Aradi = prox_sh_Na
 
 	insert fKDR_Aradi // Aradi and Holmes (1999) fast and slow KDR channels
 	gbar_fKDR_Aradi = prox_gbar_fKDR // g_fKDR
-	
+        vshift_fKDR_Aradi = -5
+
 	insert sKDR_Aradi
 	gbar_sKDR_Aradi = prox_gbar_sKDR // g_sKDR
 
         insert KA_Aradi
         gmax_KA_Aradi = prox_gmax_KA * prox_gmax_KA_scale
-
-        insert Kir21
-        gkbar_Kir21 = prox_gkbar_Kir
-
-		mg_i_Kir21 = 4
-		spm_i_Kir21 = 1
-		gsub_Kir21 = 0.25
-		fac_Kir21 = 0.005
-		vshiftbs_Kir21 = 0
-		vshiftbb_Kir21 = 0
-		b_Kir21 = 0.105
-		shiftmg_Kir21 = 0.5
-		cas_Kir21 = 0.142857
-		As_Kir21 = 0.2
-        
-
-//        insert Kir
-//        gkbar_Kir = prox_gkbar_Kir
-//        vhalfl_Kir = Kir_vhalfl_fit_
-//        kl_Kir     = Kir_kl_fit_
-//        vhalft_Kir = Kir_vhalft_fit_
-//        at_Kir     = Kir_at_fit_
-//        bt_Kir     = Kir_bt_fit_
-//        q10_Kir    = Kir_q10_fit_
 
         insert Ca_Aradi
         gtcabar_Ca_Aradi = prox_gtcabar_Ca
@@ -385,6 +364,7 @@ forsec distal {	// dendritic conductances
 
     insert Na_Aradi
     gbar_Na_Aradi = apical_gbar_Na
+    sh_Na_Aradi = apical_sh_Na
       
     insert KA_Aradi
     gmax_KA_Aradi = .01
@@ -394,6 +374,7 @@ forsec distal {	// dendritic conductances
     // low uniform density Kdr (Kim 2018)
     insert fKDR_Aradi
     gbar_fKDR_Aradi = apical_gbar_fKDR
+    vshift_fKDR_Aradi = -5
 
     insert Kir21
     gkbar_Kir21  = apical_gkbar_Kir
@@ -409,16 +390,6 @@ forsec distal {	// dendritic conductances
 		cas_Kir21 = 0.142857
 		As_Kir21 = 0.2
     
-//    insert Kir
-//    gkbar_Kir  = apical_gkbar_Kir
-//    vhalfl_Kir = Kir_vhalfl_fit_
-//    kl_Kir     = Kir_kl_fit_
-//    vhalft_Kir = Kir_vhalft_fit_
-//    at_Kir     = Kir_at_fit_
-//    bt_Kir     = Kir_bt_fit_
-//    q10_Kir    = Kir_q10_fit_
-
-
     insert K_conc
     insert Na_conc
 
@@ -509,5 +480,23 @@ proc geom_nseg_1() { local freq, d_lambda
     forsec allaxon { nseg = int((L/(d_lambda*lambda_f(freq))+0.999)/2)*2 + 1  }
 
 }
+
+
+proc geom_rescale() { local x
+
+    dredux = 0.5 // Rescale dendritic diameter by this factor
+    forsec soma { distance(0, 0.5) }        
+
+    forsec apical { // rescale dendritic diameter
+                       for j = 0, n3d()-1 {
+                          x = arc3d(j) / L
+                          howfar = distance(x)
+                          s = howfar / 250
+                          if (s > dredux) { s = dredux }
+                          pt3dchange(j, diam3d(j)*(1 - s))
+                      }             
+    }
+}
+
 
 endtemplate DGC

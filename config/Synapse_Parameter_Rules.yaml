@@ -279,6 +279,8 @@ Exp3NMDA2SGfdb:
       - b1
       - sc2
       - sh2
+      - sc3
+      - sh3
       - tauV
       - K0
       - delta_D1

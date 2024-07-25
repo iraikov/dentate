@@ -26,11 +26,13 @@ script_name = os.path.basename(__file__)
 @click.option("--syn-sources", multiple=True, type=str, help='synapse filter for source populations')
 @click.option("--syn-source-threshold", type=float, help='only show synapses for sources in top n percentile')
 @click.option("--syn-types", multiple=True, type=str, help='synapse filter for synapse types')
+@click.option("--syn-marker-scale-factor", type=float, default=4.0, help='scale factor for synapse marker')
 @click.option("--font-size", type=float, default=14)
 @click.option("--bgcolor", type=(float,float,float), default=(0.,0.,0.))
+@click.option("--edgecolor", type=(float,float,float), default=(1.,1.,1.))
 @click.option("--colormap", type=str, default='coolwarm')
 @click.option("--verbose", "-v", type=bool, default=False, is_flag=True)
-def main(config, population, gid, template_paths, dataset_prefix, config_prefix, data_file, load_synapses, load_clusters, syn_types, syn_sources, syn_source_threshold, font_size, bgcolor, colormap, verbose):
+def main(config, population, gid, template_paths, dataset_prefix, config_prefix, data_file, load_synapses, load_clusters, syn_types, syn_sources, syn_source_threshold, syn_marker_scale_factor, font_size, bgcolor, edgecolor, colormap, verbose):
 
     utils.config_logging(verbose)
     logger = utils.get_script_logger(script_name)
@@ -89,7 +91,8 @@ def main(config, population, gid, template_paths, dataset_prefix, config_prefix,
     plot.plot_biophys_cell_tree (env, biophys_cell, saveFig=True,
                                  syn_source_threshold=syn_source_threshold,
                                  synapse_filters={'syn_types': syn_types, 'sources': syn_sources},
-                                 bgcolor=bgcolor, colormap=colormap)
+                                 syn_marker_scale_factor=syn_marker_scale_factor,
+                                 bgcolor=bgcolor, edgecolor=edgecolor, colormap=colormap)
     
 
 if __name__ == '__main__':

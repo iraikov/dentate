@@ -250,7 +250,7 @@ def exchange_input_features(comm, requested_gids, input_features_attr_dict):
 @click.option("--non-structured-weights-namespace", type=str, default='Weights')
 @click.option("--non-structured-weights-path", required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False))
 @click.option("--arena-id", '-a', type=str, default='A')
-@click.option("--field-width-scale", type=float, default=1.25)
+@click.option("--field-width-scale", type=float, default=1.1)
 @click.option("--max-opt-iter", type=int, default=1000)
 @click.option("--max-weight-decay-fraction", type=float, default=1.)
 @click.option("--optimize-tol", type=float, default=1e-8)

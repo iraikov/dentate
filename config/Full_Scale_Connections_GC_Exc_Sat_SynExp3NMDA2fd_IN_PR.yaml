@@ -37,9 +37,9 @@ Synapses:
           weight: 1.0
     MC:   
       type: excitatory
-      sections: [apical]
-      layers: [IML]
-      proportions: [0.5]
+      sections: [apical, apical]
+      layers: [IML, GCL]
+      proportions: [0.5, 0.7]
       contacts: 1.
       mechanisms:
         AMPA:
@@ -50,9 +50,9 @@ Synapses:
           weight: 1.0
     ConMC:   
       type: excitatory
-      sections: [apical]
-      layers: [IML]
-      proportions: [0.5]
+      sections: [apical, apical]
+      layers: [IML, GCL]
+      proportions: [0.5, 0.3]
       contacts: 1.0
       mechanisms:
         AMPA:
@@ -77,9 +77,9 @@ Synapses:
           weight: 5.27
     BC:   
       type: inhibitory
-      sections: [soma, apical, apical]
-      layers: [GCL, GCL, IML]
-      proportions: [1.0, 1.0, 0.69]
+      sections: [soma, apical, apical, apical]
+      layers: [GCL, GCL, IML, Hilus]
+      proportions: [1.0, 1.0, 0.69, 1.0]
       contacts: 10.
       mechanisms:
         GABA_A:

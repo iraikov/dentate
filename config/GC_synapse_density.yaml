@@ -1,6 +1,10 @@
 ## GC synapse density configuration
 apical:
   excitatory: # Excitatory https://www.ncbi.nlm.nih.gov/pubmed/2760687
+    GCL:
+      mean: 3.36
+      variance: 0.35
+      minimum distance: 50.0 # minimum distance to soma
     IML: # layer
       mean: 3.36
       variance: 0.35

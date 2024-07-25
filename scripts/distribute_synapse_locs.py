@@ -9,7 +9,7 @@ from dentate import cells, neuron_utils, synapses, utils
 from dentate.env import Env
 from dentate.neuron_utils import configure_hoc_env
 from dentate.cells import load_cell_template
-from dentate.utils import viewitems
+from dentate.utils import viewitems, read_from_yaml
 from neuroh5.io import NeuroH5TreeGen, append_cell_attributes, read_population_ranges
 import h5py
 
@@ -164,7 +164,8 @@ def main(config, config_prefix, template_path, output_path, forest_path, populat
         logger.info(f'{comm.size} ranks have been allocated')
 
     env = Env(comm=comm, config=config, config_prefix=config_prefix, template_paths=template_path)
-
+    env.data_file_path = forest_path
+    env.load_celltypes()
     configure_hoc_env(env)
     
     if io_size == -1:
@@ -197,7 +198,9 @@ def main(config, config_prefix, template_path, output_path, forest_path, populat
         logger.info(f"Rank {rank} population: {population}")
         (population_start, _) = pop_ranges[population]
         template_class = load_cell_template(env, population, bcast_template=True)
+        mech_dict = env.celltypes[population].get('mech_dict', {})
 
+        template_param_dict=mech_dict.get("params", {})
         density_dict = env.celltypes[population]['synapses']['density']
         layer_set_dict = defaultdict(set)
         swc_set_dict = defaultdict(set)
@@ -221,7 +224,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, populat
             local_time = time.time()
             if gid is not None:
                 logger.info(f'Rank {rank} gid: {gid}')
-                cell = cells.make_neurotree_hoc_cell(template_class, neurotree_dict=morph_dict, gid=gid)
+                cell = cells.make_neurotree_hoc_cell(template_class, neurotree_dict=morph_dict, param_dict=template_param_dict, gid=gid)
                 cell_sec_dict = {'apical': (cell.apical, None),
                                  'basal': (cell.basal, None),
                                  'soma': (cell.soma, None),
@@ -235,13 +238,15 @@ def main(config, config_prefix, template_path, output_path, forest_path, populat
 
                 random_seed = env.model_config['Random Seeds']['Synapse Locations'] + gid
                 if distribution == 'uniform':
-                    syn_dict, seg_density_per_sec = synapses.distribute_uniform_synapses(random_seed, env.Synapse_Types, env.SWC_Types, env.layers,
+                    syn_dict, seg_density_per_sec = synapses.distribute_uniform_synapses(random_seed, env.Synapse_Types,
+                                                                                         env.SWC_Types, env.layers,
                                                                                          density_dict, morph_dict,
                                                                                          cell_sec_dict, cell_secidx_dict)
                                                                     
                     
                 elif distribution == 'poisson':
-                    syn_dict, seg_density_per_sec = synapses.distribute_poisson_synapses(random_seed, env.Synapse_Types, env.SWC_Types, env.layers,
+                    syn_dict, seg_density_per_sec = synapses.distribute_poisson_synapses(random_seed, env.Synapse_Types,
+                                                                                         env.SWC_Types, env.layers,
                                                                                          density_dict, morph_dict,
                                                                                          cell_sec_dict, cell_secidx_dict)
                 else:

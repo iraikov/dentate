@@ -28,6 +28,9 @@ from dentate.utils import get_low_pass_filtered_trace, power_spectrogram, butter
 from dentate.neuron_utils import interplocs
 from dentate.io_utils import get_h5py_attr, set_h5py_attr
 
+import logging
+logging.getLogger('matplotlib.font_manager').disabled = True
+
 try:
     import dentate.spikedata as spikedata
 except ImportError as e:
@@ -1192,6 +1195,8 @@ def plot_biophys_cell_tree (env, biophys_cell, node_filters={'swc_types': ['apic
     
     colormap = kwargs.get("colormap", 'coolwarm')
     mlab.figure(bgcolor=kwargs.get("bgcolor", (0,0,0)))
+    edge_color = kwargs.get("edgecolor", (1,1,1))
+    syn_marker_scale_factor = kwargs.get("syn_marker_scale_factor", 4.0)
     
     xcoords = np.asarray([ x for (i, x) in morph_graph.nodes.data('x') ], dtype=np.float32)
     ycoords = np.asarray([ y for (i, y) in morph_graph.nodes.data('y') ], dtype=np.float32)
@@ -1208,8 +1213,8 @@ def plot_biophys_cell_tree (env, biophys_cell, node_filters={'swc_types': ['apic
     logger.info('plotting tree %i' % biophys_cell.gid)
     
     # Plot morphology graph with Mayavi
-    plot_graph(xcoords, ycoords, zcoords, start_idx, end_idx, edge_color=(1,1,1),
-                opacity=0.8, line_width=line_width)
+    plot_graph(xcoords, ycoords, zcoords, start_idx, end_idx, edge_color=edge_color,
+               opacity=0.8, line_width=line_width)
 
 
     # Obtain and plot synapse xyz locations
@@ -1217,36 +1222,59 @@ def plot_biophys_cell_tree (env, biophys_cell, node_filters={'swc_types': ['apic
     synapse_filters = get_syn_filter_dict(env, synapse_filters, convert=True)
     syns_dict = syn_attrs.filter_synapses(biophys_cell.gid, **synapse_filters)
     syn_sec_dict = defaultdict(list)
+    syn_source_pop_set = set()
     if (syn_source_threshold is not None) and (syn_source_threshold > 0.0):
         syn_source_count = defaultdict(int)
+        syn_source_pop = {}
         for syn_id, syn in viewitems(syns_dict):
             syn_source_count[syn.source.gid] += 1
-        syn_source_max = 0
+            syn_source_pop[syn.source.gid] = syn.source.population
+        syn_source_max = defaultdict(int)
         syn_source_pctile = {}
         for source_id, source_id_count in viewitems(syn_source_count):
-            syn_source_max = max(syn_source_max, source_id_count)
-        logger.info("synapse source max count is %d" % (syn_source_max))
+            source_pop = syn_source_pop[source_id]
+            syn_source_max[source_pop] = max(syn_source_max[source_pop], source_id_count)
+        logger.info(f"synapse source max counts are {syn_source_max}")
         for syn_id, syn in viewitems(syns_dict):
             count = syn_source_count[syn.source.gid]
-            syn_source_pctile[syn_id] = float(count) / float(syn_source_max)
+            syn_source_pctile[syn_id] = float(count) / float(syn_source_max[syn.source.population])
         syns_dict = { syn_id: syn for syn_id, syn in viewitems(syns_dict)
-                          if syn_source_pctile[syn_id] >= syn_source_threshold}
+                      if syn_source_pctile[syn_id] >= syn_source_threshold}
     for syn_id, syn in viewitems(syns_dict):
         syn_sec_dict[syn.syn_section].append(syn)
-    syn_xyz_sec_dict = {}
-    syn_src_sec_dict = {}
+        
+    syn_xyz_sec_list = []
+    syn_src_sec_list = []
     for sec_id, syns in viewitems(syn_sec_dict):
         sec = biophys_cell.hoc_cell.sections[sec_id]
-        syn_locs = [syn.syn_loc for syn in syns]
-        syn_xyz_sec_dict[sec_id] = interplocs(sec, syn_locs)
-        syn_sources = [syn.source.gid for syn in syns]
-        syn_src_sec_dict[sec_id] = np.asarray(syn_sources)
+        syn_locs = np.asarray([syn.syn_loc for syn in syns])
+        xyz = interplocs(sec, syn_locs)
+        syn_xyz_sec_list.append(xyz)
+        syn_sources = np.asarray([syn.source.population for syn in syns], dtype=np.int)
+        syn_source_pop_set.update(syn_sources)
+        syn_src_sec_list.append(syn_sources)
+
+    syn_xyz_array = np.vstack(syn_xyz_sec_list)
+    syn_src_array = np.concatenate(syn_src_sec_list)
 
     #pprint.pprint(syns_dict)
+    # Color lookup table
+    Nsources = len(syn_source_pop_set)
+    color_table = np.zeros((Nsources, 4))
+
+    for i in range(Nsources):
+        f = i/Nsources
+        color_table[i,:] = [255*(1-f),0,255*f,255]
+
     logger.info('plotting %i synapses' % len(syns_dict))
-    for sec_id, syn_xyz in viewitems(syn_xyz_sec_dict):
-        syn_sources = syn_src_sec_dict[sec_id]
-        mlab.points3d(syn_xyz[:,0], syn_xyz[:,1], syn_xyz[:,2], syn_sources, scale_mode='vector',scale_factor=4.0)
+
+    nodes = mlab.points3d(syn_xyz_array[:,0], syn_xyz_array[:,1], syn_xyz_array[:,2],
+                          syn_src_array,
+                          scale_mode='vector',
+                          scale_factor=syn_marker_scale_factor)
+        
+    nodes.module_manager.scalar_lut_manager.lut.number_of_colors = Nsources
+    nodes.module_manager.scalar_lut_manager.lut.table = color_table
         
     mlab.gcf().scene.x_plus_view()
     mlab.show()
@@ -1905,17 +1933,21 @@ def plot_intracellular_state (input_path, namespace_ids, include = ['eachPop'], 
                         gid_set = list(set(ns_state_info_dict[state_variable]))[:max_units]
                         break
                     else:
-                        raise RuntimeError('unable to find recording for state variable %s population %s namespace %s' % (state_variable, population, namespace))
+                        raise RuntimeError(f'unable to find recording for state variable '
+                                           f'{state_variable} population {population} '
+                                           f'namespace {namespace}')
 
 
     pop_states_dict = defaultdict(lambda: defaultdict(lambda: dict()))
     for namespace_id in namespace_ids:
         logger.info(f"Reading state values from namespace {namespace_id}...")
-        data = read_state (input_path, include, namespace_id, time_variable=time_variable,
-                           state_variables=[state_variable], time_range=time_range, max_units = max_units,
+        data = read_state (input_path, include, namespace_id,
+                           time_variable=time_variable,
+                           state_variables=[state_variable],
+                           time_range=time_range, max_units = max_units,
                            gid = gid_set, n_trials=n_trials)
         states  = data['states']
-        n_trials = data['n_trials']
+        n_trials = max(data['n_trials'], n_trials)
         
         for (pop_name, pop_states) in viewitems(states):
             for (gid, cell_states) in viewitems(pop_states):

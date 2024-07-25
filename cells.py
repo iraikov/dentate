@@ -1492,9 +1492,10 @@ def init_nseg(sec, spatial_res=0, verbose=True):
     """
     sugg_nseg = d_lambda_nseg(sec)
     sugg_nseg *= 3 ** spatial_res
-    if verbose:
-        logger.info('init_nseg: changed %s.nseg %i --> %i' % (sec.hname(), sec.nseg, sugg_nseg))
-    sec.nseg = int(sugg_nseg)
+    if sugg_nseg > sec.nseg:
+        sec.nseg = int(sugg_nseg)
+        if verbose:
+            logger.info('init_nseg: changed %s.nseg %i --> %i' % (sec.hname(), sec.nseg, sugg_nseg))
 
 
 def insert_spine(cell, node, parent_loc, child_loc=0, neck_L=1.58, neck_diam=0.077, head_L=0.5, head_diam=0.5):
@@ -1749,6 +1750,7 @@ def count_spines_per_seg(node, env, gid):
 
     filtered_synapses = syn_attrs.filter_synapses(gid, syn_sections=[node.index], \
                                                   syn_types=[env.Synapse_Types['excitatory']])
+    logger.info(f"count_spines_per_seg: {len(filtered_synapses)} synapses")
     if len(filtered_synapses) > 0:
         this_syn_locs = np.asarray([syn.syn_loc for _, syn in viewitems(filtered_synapses)])
         seg_width = 1. / node.sec.nseg
@@ -1769,22 +1771,21 @@ def correct_node_for_spines_g_pas(node, env, gid, soma_g_pas, verbose=True):
     :param soma_g_pas: float
     :param verbose: bool
     """
-    SA_spine = math.pi * (1.58 * 0.077 + 0.5 * 0.5)
+    g_pas_fraction = 0.0067
     if len(node.spine_count) != node.sec.nseg:
         count_spines_per_seg(node, env, gid)
     for i, segment in enumerate(node.sec):
-        SA_seg = segment.area()
         num_spines = node.spine_count[i]
-
-        g_pas_correction_factor = ((SA_seg * node.sec(segment.x).g_pas + num_spines * SA_spine * soma_g_pas) /
-                                   (SA_seg * node.sec(segment.x).g_pas))
+        g_pas_correction_factor = 1.
+        if num_spines > 0:
+            g_pas_correction_factor = 1. + num_spines * g_pas_fraction
         node.sec(segment.x).g_pas *= g_pas_correction_factor
         if verbose:
             logger.info('g_pas_correction_factor for gid: %i; %s seg %i: %.3f' %
                         (gid, node.name, i, g_pas_correction_factor))
 
 
-def correct_node_for_spines_cm(node, env, gid, verbose=True):
+def correct_node_for_spines_cm_(node, env, gid, max_cm=2.0, verbose=True):
     """
     If not explicitly modeling spine compartments for excitatory synapses, this method scales cm in this
     dendritic section proportional to the number of excitatory synapses contained in the section.
@@ -1803,9 +1804,34 @@ def correct_node_for_spines_cm(node, env, gid, verbose=True):
         SA_seg = segment.area()
         num_spines = node.spine_count[i]
         cm_correction_factor = (SA_seg + cm_fraction * num_spines * SA_spine) / SA_seg
-        node.sec(segment.x).cm *= cm_correction_factor
+        cm_value = node.sec(segment.x).cm * cm_correction_factor
+        if cm_value > max_cm:
+            cm_value = max_cm
+        node.sec(segment.x).cm = cm_value
         if verbose:
             logger.info('cm_correction_factor for gid: %i; %s seg %i: %.3f' % (gid, node.name, i, cm_correction_factor))
+
+def correct_node_for_spines_cm(node, env, gid, verbose=True):
+    """
+    If not explicitly modeling spine compartments for excitatory synapses, this method scales cm in this
+    dendritic section proportional to the number of excitatory synapses contained in the section.
+    :param node: :class:'SHocNode'
+    :param env:  :class:'Env'
+    :param gid: int
+    :param verbose: bool
+    """
+    cm_fraction = 0.0067 # corresponds to correction factor 1.8 for 120 spines
+    if len(node.spine_count) != node.sec.nseg:
+        count_spines_per_seg(node, env, gid)
+    for i, segment in enumerate(node.sec):
+        num_spines = node.spine_count[i]
+        cm_correction_factor = 1.0
+        if num_spines > 0:
+            cm_correction_factor = 1. + num_spines * cm_fraction
+        cm_value = node.sec(segment.x).cm * cm_correction_factor
+        node.sec(segment.x).cm = cm_value
+        if verbose:
+            logger.info('cm_correction_factor for gid: %i; %s seg %i (%d spines): %.3f' % (gid, node.name, i, num_spines, cm_correction_factor))
 
 
 def correct_cell_for_spines_g_pas(cell, env, verbose=False):
@@ -2468,7 +2494,7 @@ def make_section_graph(neurotree_dict):
             loc = np.argwhere(src_pts == dst_parent)[0]
             sec_loc.append(loc)
                 
-    sec_graph = nx.DiGraph()
+    sec_graph = nx.MultiDiGraph()
     for i, j, loc in zip(sec_src, sec_dst, sec_loc):
         sec_graph.add_edge(i, j, loc=loc)
 
@@ -3028,7 +3054,7 @@ def init_circuit_context(env, pop_name, gid,
                          load_clusters=False, cluster_dict=None,
                          load_synapses=False, synapses_dict=None,
                          set_edge_delays=True, **kwargs):
-    
+
     syn_attrs = env.synapse_attributes
     synapse_config = env.celltypes[pop_name]['synapses']
 
@@ -3059,6 +3085,7 @@ def init_circuit_context(env, pop_name, gid,
         init_clusters=True
     if load_synapses or (synapses_dict is not None):
         init_synapses=True
+    logger.info(f"init_circuit_context: load_synapses = {load_synapses} init_synapses = {init_synapses}")
 
     if init_synapses:
         if synapses_dict is not None:
@@ -3471,11 +3498,12 @@ def record_cell(env, pop_name, gid, recording_profile=None):
                             rec_id = '%s.%i' % (node.type, node.index)
                         rec = make_rec(rec_id, pop_name, gid, cell.hoc_cell, sec=sec, dt=dt,
                                        loc=locdict[node.type], param=recvar, label=reclab,
-                                       description=node.name)
-                        recs.append(rec)
-                        env.recs_dict[pop_name][rec_id].append(rec)
-                        env.recs_count += 1
-                        visited.add(str(sec))
+                                       description=node.name, raise_error=False)
+                        if rec is not None:
+                            recs.append(rec)
+                            env.recs_dict[pop_name][rec_id].append(rec)
+                            env.recs_count += 1
+                            visited.add(str(sec))
             for recvar, recdict  in viewitems(recording_profile.get('synaptic quantity', {})):
                 syn_filters = recdict.get('syn_filters', {})
                 syn_sections = recdict.get('sections', None)
