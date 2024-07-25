@@ -1,0 +1,499 @@
+
+begintemplate DGC
+
+public all, soma, axon, allaxon, ais, hillock, apical, basal
+public nGCLD, nPD, nMD, nDD
+public GCLDidxs, PDidxs, MDidxs, DDidxs
+public sections
+public layers
+public nDends
+public ndendpts
+public verbose
+public is_art
+public xx, yy, zz
+verbose = 1
+filemode = 1
+id  = -1
+gid = -1
+
+create sections[1]
+
+objref all, soma, axon, allaxon, ais, hillock, apical, basal, somaprox, prox, distal
+objref ndendpts
+objref apicalidx, basalidx, somaidx, axonidx, aisidx, hilidx, somaproxidx, proxidx, distalidx
+objref nodesecmap, layers
+objref GCLDidxs, PDidxs, MDidxs, DDidxs
+
+strdef forest_path
+strdef dendrite_topology_fn, dendrite_points_fn, spine_density_fn
+strdef dendrite_topology_index_fn, dendrite_points_index_fn, spine_density_index_fn
+
+
+xopen("DGC_Morphology_minimal.hoc")
+
+
+// Code from CA1 pyramidal cell model by Tomko et al., 2021
+proc distribute_distance(){local i, j, k, vv, x, sc, shift, nlocals localobj sl, localnames, localvals
+    strdef stmp, distfunc, mech, varname
+
+  sl = $o1
+  mech = $s2
+  distfunc = $s3
+  nlocals = (numarg()-3) / 2
+  for j=0,nlocals-1 {
+      i = 4 + j*2
+      varname = $si
+      i = 4 + j*2 + 1
+      vv = $i
+      sprint(stmp, "%s = %g", varname, vv)
+      execute(stmp)
+    } 
+  sections[somaidx.x[0]] distance(0, 0.5)
+  sprint(distfunc, "%%s %s(%%f) = %s", mech, distfunc)
+  forsec sl for(x, 0) {
+    sprint(stmp, distfunc, secname(), x, distance(x), sc, shift)
+    execute(stmp)
+  }
+}
+
+
+proc assert() { local test strdef errmsg
+    
+    test = $1
+    errmsg = $s2
+    
+    if (!test) {
+        execerror ("Assertion failed: ", errmsg)
+    }
+}
+
+
+proc init() {
+    
+    gid = $1
+    forest_path = $s2
+    
+    xx = 0
+    yy = 0
+    zz = 0
+
+    if (numarg() > 0) {
+           parameters_from_python($o13)
+    } else {
+           parameters() 
+    }
+    
+    celldef($o3,$o4,$o5,$o6,$o7,$o8,$o9,$o10,$o11,$o12)
+    
+}
+
+
+proc parameters() {
+
+     celsius = 25 // temperature
+     v_init = -80 // resting potential
+     nao0 = 150
+     ko0 = 4
+
+     // Passive properties
+
+     Ra0 = 200 // input resistance
+     cm0 = 1 // membrane specific conductance
+
+     g_pas0 = 2.6315e-5
+       
+     // Conductance properties
+
+     prox_gbar_Na = 0.03
+     ais_sh_nax = 0
+     ais_sha_nax = 0
+
+     hillock_sh_nax = 0
+     hillock_sha_nax = 0
+
+     prox_gbar_fKDR = .005
+     prox_gbar_sKDR = .016
+
+     prox_gmax_KA = 0.02
+     prox_gmax_KA_scale = 0.1
+        
+     prox_gtcabar_Ca = 0.00015
+     prox_gncabar_Ca = 0.002
+     prox_glcabar_Ca = 0.010
+     prox_gbkbar_CadepK = 0.0003
+     prox_gskbar_CadepK = 0.0005
+
+     prox_gbar_sAHP = 0.001
+     prox_cac_sAHP = 0.025
+
+     apical_gbar_Na = 0.018
+
+     apical_gkbar_Kir = 0.000353903
+
+     apical_gmax_KA_scale = 0.02
+     apical_gmax_KA_shift = 300.0
+     apical_gbar_fKDR = 0.002
+
+     ais_gbar_nax  = 0.04
+     ais_gbar_fKDR = 0.03
+     ais_gmax_KA = 0.004
+
+     hillock_gbar_nax  = 0.01
+     hillock_gbar_fKDR = 0.02
+     hillock_gmax_KA = 0.002
+
+     axon_gbar_scale = 0.33
+}      
+
+
+proc parameters_from_python() { localobj param_dict
+    
+    param_dict = $o1
+    
+    celsius = param_dict.__getitem__("celsius")
+    v_init = param_dict.__getitem__("v_init")
+    nao0 = param_dict.__getitem__("nao0")
+    ko0 = param_dict.__getitem__("ko0")
+    
+    Ra0 = param_dict.__getitem__("Ra0")
+    cm0 = param_dict.__getitem__("cm0")
+    g_pas0 = param_dict.__getitem__("g_pas0")
+
+    prox_gbar_Na = param_dict.__getitem__("prox_gbar_Na")
+
+    prox_gbar_fKDR = param_dict.__getitem__("prox_gbar_fKDR")
+    prox_gbar_sKDR = param_dict.__getitem__("prox_gbar_sKDR")
+
+    prox_gmax_KA = param_dict.__getitem__("prox_gmax_KA")
+    prox_gmax_KA_scale = param_dict.__getitem__("prox_gmax_KA_scale")
+        
+    prox_gtcabar_Ca = param_dict.__getitem__("prox_gtcabar_Ca")
+    prox_gncabar_Ca = param_dict.__getitem__("prox_gncabar_Ca")
+    prox_glcabar_Ca = param_dict.__getitem__("prox_glcabar_Ca")
+    prox_gbkbar_CadepK = param_dict.__getitem__("prox_gbkbar_CadepK")
+    prox_gskbar_CadepK = param_dict.__getitem__("prox_gskbar_CadepK")
+    prox_gbar_sAHP = param_dict.__getitem__("prox_gbar_sAHP")
+    prox_cac_sAHP = param_dict.__getitem__("prox_cac_sAHP")
+    
+    apical_gbar_Na = param_dict.__getitem__("apical_gbar_Na")
+    
+    apical_gmax_KA_scale = param_dict.__getitem__("apical_gmax_KA_scale")
+    apical_gmax_KA_shift = param_dict.__getitem__("apical_gmax_KA_shift")
+    apical_gbar_fKDR = param_dict.__getitem__("apical_gbar_fKDR")
+    apical_gkbar_Kir = param_dict.__getitem__("apical_gkbar_Kir")
+    
+    ais_sh_nax  = param_dict.__getitem__("ais_sh_nax")
+    ais_sha_nax  = param_dict.__getitem__("ais_sha_nax")
+    ais_gbar_nax  = param_dict.__getitem__("ais_gbar_nax")
+    ais_gbar_fKDR = param_dict.__getitem__("ais_gbar_fKDR")
+    ais_gmax_KA = param_dict.__getitem__("ais_gmax_KA")
+
+    hillock_sh_nax  = param_dict.__getitem__("hillock_sh_nax")
+    hillock_sha_nax  = param_dict.__getitem__("hillock_sha_nax")
+    hillock_gbar_nax  = param_dict.__getitem__("hillock_gbar_nax")
+    hillock_gbar_fKDR = param_dict.__getitem__("hillock_gbar_fKDR")
+    hillock_gmax_KA = param_dict.__getitem__("hillock_gmax_KA")
+    
+    axon_gbar_scale = param_dict.__getitem__("axon_gbar_scale")
+    
+}
+
+proc celldef() {
+    
+    GCLDidxs = new Vector()
+    PDidxs  = new Vector()
+    MDidxs  = new Vector()
+    DDidxs  = new Vector()
+    
+    apicalidx = new Vector()
+    basalidx  = new Vector()
+    somaidx   = new Vector()
+    axonidx   = new Vector()
+    aisidx    = new Vector()
+    hilidx    = new Vector()
+    
+    layers = new List() 
+    
+    if (numarg() > 6) {
+        shape($o1,$o6,$o7,$o8,$o9)
+    } else if (numarg() > 1) {
+        shape($o5)
+    } else {
+        shape()
+    }
+    if (numarg() > 1) {
+        topol($o1,$o2,$o3,$o4,$o5,$o10)
+    } else {
+        topol()
+    }
+    geom()
+    subsets()
+    subsets_1()
+    geom_nseg_1()
+    geom_rescale()
+    geom_nseg_1()
+    biophys()
+    e_pas_init()
+}
+
+func is_art()  { return 0 }
+
+proc position() { local i
+    
+    forall {
+        for i = 0, n3d()-1 {
+            pt3dchange(i, $1-xx+x3d(i), $2-yy+y3d(i), $3-zz+z3d(i), diam3d(i))
+        }
+    }
+    xx = $1  yy = $2  zz = $3
+}
+
+
+proc subsets_1() { local i, s
+
+    // defines distinct soma/prox and distal regions
+
+    proxlimit = 100 // maximum limit in microns of the proximal region
+
+    napical = apicalidx.size()
+    
+    somaprox = new SectionList()
+    somaproxidx = new Vector()
+    prox = new SectionList()	
+    proxidx = new Vector()
+    distal = new SectionList()
+    distalidx = new Vector()
+
+    for i=0, somaidx.size()-1 {
+        s = somaidx.x[i]
+        somaproxidx.append(s)
+        sections[s] {  somaprox.append() }
+    }                      
+    
+    sections[somaidx.x[0]] { distance(0, 0.5) }
+
+    for i=0,napical-1 {
+        s = apicalidx.x[i]
+        // define which dendrites are proximal
+        access sections[s]
+		 howfar = distance(1, 0.5)
+		 if (howfar <  proxlimit) {
+                    proxidx.append(s)
+                    somaproxidx.append(s)
+                    sections[s]  { prox.append() somaprox.append() }
+                 }
+		 if (howfar >= proxlimit) {
+                    distalidx.append(s)
+                    sections[s]  distal.append()
+                 }
+	}
+
+    
+}
+
+//  Biophysics initialization
+
+proc biophys() {
+
+forall {
+    v = v_init
+
+    Ra = Ra0
+    cm = cm0
+    
+    insert pas
+    g_pas = g_pas0
+
+    e_pas = v 
+
+    insert K_conc
+    insert Na_conc
+
+    nao0_Na_conc = nao0
+    nai0_Na_conc = 5    
+    ko0_K_conc = ko0
+}
+
+forsec somaprox {// Somatic and proximal dendrite conductances
+
+        g_pas = 0.01*g_pas0
+       
+        insert Na_Aradi
+        gbar_Na_Aradi = prox_gbar_Na
+
+	insert fKDR_Aradi // Aradi and Holmes (1999) fast and slow KDR channels
+	gbar_fKDR_Aradi = prox_gbar_fKDR // g_fKDR
+	
+	insert sKDR_Aradi
+	gbar_sKDR_Aradi = prox_gbar_sKDR // g_sKDR
+
+        insert KA_Aradi
+        gmax_KA_Aradi = prox_gmax_KA * prox_gmax_KA_scale
+
+        insert Ca_Aradi
+        gtcabar_Ca_Aradi = prox_gtcabar_Ca
+        gncabar_Ca_Aradi = prox_gncabar_Ca
+        glcabar_Ca_Aradi = prox_glcabar_Ca
+
+        insert CadepK_Aradi
+        gbkbar_CadepK_Aradi = prox_gbkbar_CadepK
+        gskbar_CadepK_Aradi = prox_gskbar_CadepK
+
+        insert sAHP
+        gbar_sAHP = prox_gbar_sAHP
+        cac_sAHP = prox_cac_sAHP
+
+        insert K_conc
+        insert Na_conc
+        insert Ca_conc
+
+}
+
+
+forsec distal {	// dendritic conductances
+
+    insert Na_Aradi
+    gbar_Na_Aradi = apical_gbar_Na
+      
+    insert KA_Aradi
+    gmax_KA_Aradi = .01
+    
+    // KA channel with density increasing towards distal dendrite (Kim 2018)
+    // Uniform density Na (Kim 2018)
+    // low uniform density Kdr (Kim 2018)
+    insert fKDR_Aradi
+    gbar_fKDR_Aradi = apical_gbar_fKDR
+
+    insert Kir21
+    gkbar_Kir21  = apical_gkbar_Kir
+
+		mg_i_Kir21 = 4
+		spm_i_Kir21 = 1
+		gsub_Kir21 = 0.25
+		fac_Kir21 = 0.005
+		vshiftbs_Kir21 = 0
+		vshiftbb_Kir21 = 0
+		b_Kir21 = 0.105
+		shiftmg_Kir21 = 0.5
+		cas_Kir21 = 0.142857
+		As_Kir21 = 0.2
+
+
+    insert K_conc
+    insert Na_conc
+
+}
+                     
+
+distribute_distance(distal, "gmax_KA_Aradi", "(1.0/(1.0 + exp(apical_gmax_KA_scale*(%.17g - apical_gmax_KA_shift))))*prox_gmax_KA", "apical_gmax_KA_scale", apical_gmax_KA_scale, "apical_gmax_KA_shift", apical_gmax_KA_shift, "prox_gmax_KA", prox_gmax_KA)
+
+forsec hillock { // hillock conductances
+
+       g_pas = 0.005*g_pas0
+
+       insert nax
+       gbar_nax = hillock_gbar_nax
+       sh_nax = hillock_sh_nax
+       sha_nax = hillock_sha_nax
+         
+       insert fKDR_Aradi
+       gbar_fKDR_Aradi = hillock_gbar_fKDR
+
+       insert KA_Aradi
+       gmax_KA_Aradi = hillock_gmax_KA
+
+       insert K_conc
+       insert Na_conc
+}
+
+forsec ais { // AIS conductances
+
+       g_pas = 0.005*g_pas0
+
+       insert nax
+       gbar_nax = ais_gbar_nax
+       sh_nax = ais_sh_nax
+       sha_nax = ais_sha_nax
+         
+       insert fKDR_Aradi
+       gbar_fKDR_Aradi = ais_gbar_fKDR
+
+       insert KA_Aradi
+       gmax_KA_Aradi = ais_gmax_KA
+
+       insert K_conc
+       insert Na_conc
+
+}
+
+forsec axon {
+
+       g_pas = 0.005*g_pas0
+
+       insert nax
+       gbar_nax = ais_gbar_nax * axon_gbar_scale    
+       sh_nax = ais_sh_nax
+       sha_nax = ais_sha_nax
+
+       insert fKDR_Aradi
+       gbar_fKDR_Aradi = ais_gbar_fKDR * axon_gbar_scale
+
+       insert KA_Aradi
+       gmax_KA_Aradi = ais_gmax_KA * axon_gbar_scale
+        
+       insert K_conc
+       insert Na_conc
+
+}      
+
+//  Basic parameters for all compartments
+
+
+}
+
+//  Reinitialization procedure
+
+proc e_pas_init() {
+    v_init_e_pas = -70
+
+forall {
+    v = v_init_e_pas// all compartments reset Vrest
+    e_pas = v
+}
+}
+
+proc geom_nseg_1() { local freq, d_lambda
+    
+    freq = 100 // Hz, frequency at which AC length constant will be computed
+    d_lambda = 0.05
+    
+    forsec soma area(0.5)
+    forall { nseg = int((L/(d_lambda*lambda_f(freq))+0.999)/2)*2 + 1 }
+             
+    forsec soma { nseg=5 L=18 diam(0:0.5)=3.6:10.0 diam(0.5:1.0)=10.0:3.6  }
+}
+
+proc geom_rescale() { local x
+
+    dredux = .7 // Rescale dendritic diameter by this factor
+    forsec soma { distance(0, 0.5) }        
+
+    forsec apical { // rescale dendritic diameter
+                       for j = 0, n3d()-1 {
+                          x = arc3d(j) / L
+                          howfar = distance(x)
+                          s = howfar / 100
+                          if (s > dredux) { s = dredux }
+                          pt3dchange(j, diam3d(j)*(1 - s))
+                      }             
+    }
+
+    forsec hillock {  for j = 0, 1 {
+                      d = diam3d(j)
+                      pt3dchange(j, 0.5*d)
+               }
+            }
+}
+
+
+endtemplate DGC
