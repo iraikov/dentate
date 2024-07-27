@@ -1,0 +1,66 @@
+: Na channel
+
+
+NEURON {
+	SUFFIX Na_Aradi
+	USEION na READ ena WRITE ina
+	RANGE gbar, g, sh
+}
+
+UNITS {
+	(molar) = (1/liter)
+	(mM) = (millimolar)
+	(mV) = (millivolt)
+	(mA) = (milliamp)
+	(S) = (siemens)
+}
+
+PARAMETER {
+  gbar = 0 (S/cm2)
+  sh = 0
+}
+
+ASSIGNED {
+	v		(mV)
+	ena		(mV)
+	ina		(mA/cm2)
+        g  	        (S/cm2)
+        am	        (/ms)	
+	bm		(/ms)	
+        ah	        (/ms)	
+	bh		(/ms)	
+}
+
+STATE { m h }
+
+INITIAL { 
+	rates(v)
+	m = am/(am + bm)
+	h = ah/(ah + bh)
+}
+    
+BREAKPOINT {
+  SOLVE states METHOD cnexp
+  g = gbar*(m^3)*h
+  ina = g*(v - ena)
+} 
+
+DERIVATIVE states {
+   rates(v)
+   m' = am*(1 - m) - bm*m  
+   h' = ah*(1 - h) - bh*h
+}
+
+
+PROCEDURE rates(v (mV)) { LOCAL amx, bmx
+    
+    amx = 0.2*(v + 45 - sh) / 1(mV)
+    am = 1.5*amx/(1 - exp(-amx)) 
+    bmx = -0.2*(v + 17 - sh) / 1(mV)
+    bm = 1.1*bmx/(1 - exp(-bmx)) 
+    ah = 0.23*exp(-0.05*(v + 67 - sh) / 1(mV)) 
+    bh = 3.33/(1 + exp(0.1*(-14.5 - v - sh) / 1(mV)))
+}
+
+
+ 

@@ -1,0 +1,60 @@
+: fKDR channel
+
+
+NEURON {
+	SUFFIX fKDR_Aradi
+	USEION k READ ek WRITE ik
+	RANGE gbar, g, i, vshift
+}
+
+UNITS {
+	(molar) = (1/liter)
+	(mM) = (millimolar)
+	(mV) = (millivolt)
+	(mA) = (milliamp)
+	(S) = (siemens)
+}
+
+PARAMETER {
+  gbar = 0 (S/cm2)
+  vshift = 0 (mV)
+}
+
+ASSIGNED {
+	v		(mV)
+	ek		(mV)
+	ik		(mA/cm2)
+	i 		(mA/cm2)
+        g  	        (S/cm2)
+        an	        (/ms)	
+	bn		(/ms)	
+}
+
+STATE { n }
+
+INITIAL { 
+	rates(v)
+	n = an/(an + bn)
+}
+    
+BREAKPOINT {
+    SOLVE states METHOD cnexp
+    g = gbar * n^4
+    ik = g*(v - ek)
+    i = ik
+} 
+
+DERIVATIVE states {
+   rates(v)
+   n' = an*(1 - n) - bn*n
+}
+
+
+PROCEDURE rates(v (mV)) { LOCAL anx
+    
+    anx = 0.1667*(v + 23 + vshift) / 1(mV)
+    an = 0.42*anx/(1 - exp(-anx)) 
+    bn = 0.264*exp(-0.025*(v + 48 + vshift) / 1(mV))
+
+    
+}
