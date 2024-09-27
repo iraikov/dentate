@@ -38,12 +38,12 @@ for fname in sys.argv[1:]:
     ik_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik variance"]["Attribute Value"][:]
     ina = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ina mean"]["Attribute Value"][:]
     ina_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ina variance"]["Attribute Value"][:]
-    i_Kir = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_Kir21 mean"]["Attribute Value"][:]
-    i_Kir_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_Kir21 variance"]["Attribute Value"][:]
-    i_KA = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_KA_Aradi mean"]["Attribute Value"][:]
-    i_KA_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_KA_Aradi variance"]["Attribute Value"][:]
-    i_fKDR = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_fKDR_Aradi mean"]["Attribute Value"][:]
-    i_fKDR_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_fKDR_Aradi variance"]["Attribute Value"][:]
+    i_Kir = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kir21 mean"]["Attribute Value"][:]
+    i_Kir_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kir21 variance"]["Attribute Value"][:]
+    i_KA = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv42 mean"]["Attribute Value"][:]
+    i_KA_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv42 variance"]["Attribute Value"][:]
+    i_fKDR = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv11 mean"]["Attribute Value"][:]
+    i_fKDR_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv11 variance"]["Attribute Value"][:]
     i_sKDR = None
     i_sKDR_var = None
     if f"{grp} vclamp i_sKDR_Aradi mean" in f["Populations"]["GC"]["Cell Clamp Results"]:

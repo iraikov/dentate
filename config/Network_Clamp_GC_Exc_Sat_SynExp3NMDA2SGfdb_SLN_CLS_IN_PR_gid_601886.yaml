@@ -18,7 +18,7 @@ Analysis: !include Analysis_Configuration.yaml
 Cell Types:
   GC:
     template: DGC
-    template file: DGC_Template_AHR.hoc
+    template file: DGC_Template_BJR.hoc
     mechanism file: DG_GC_SynExp3NMDA2SGfdb_gid_601886_mech.yaml
     synapses:
       correct_for_spines: True

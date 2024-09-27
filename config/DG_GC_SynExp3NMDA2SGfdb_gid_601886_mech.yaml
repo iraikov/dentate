@@ -1,48 +1,42 @@
 params:
   g_pas0: 2.0e-6
   celsius:  25.0
-  nao0: 160
+  nao0: 145
   ko0: 4
-  Ra0: 210
+  Ra_dend: 200
+  Ra_axon: 110
   cm0: 1
   v_init: -80.0
-    
-  prox_gbar_Na:  0.029
-  prox_sh_Na:  10.0
-  prox_gbar_fKDR: 0.00025
-  prox_gbar_sKDR: 0.0001
-  prox_gmax_KA: 0.001
-  prox_gmax_KA_scale: 0.05
-
-  prox_gtcabar_Ca: 0.00015
-  prox_gncabar_Ca: 0.002
-  prox_glcabar_Ca: 0.010
-  prox_gbkbar_CadepK: 0.0003
-  prox_gskbar_CadepK: 0.0003
-  prox_gbar_sAHP: 0.0005
-  prox_cac_sAHP: 0.008
-
-  ais_gbar_nax: 0.03
-  ais_gmax_KA: 0.008
-  ais_gbar_fKDR: 0.028
-  ais_sh_nax: 2
-  ais_sha_nax: -5
-
-  hillock_gbar_nax: 0.009
-  hillock_gmax_KA: 0.004
-  hillock_gbar_fKDR: 0.012
-  hillock_sh_nax: 2
-  hillock_sha_nax: -2
-
-  apical_gbar_Na: 0.005
-  apical_sh_Na: 10.0
+  
+  apical_gbar_Na: 0.05
+  apical_initial_gmax_KA: 0.001
   apical_gmax_KA_scale: -0.02
   apical_gmax_KA_shift: 70
   apical_gbar_fKDR: 0.0002
-  apical_gkbar_Kir: 0.00025
+  apical_gkbar_Kir: 0.001
 
+  prox_gbar_Na: 0.05
+  prox_gbar_fKDR: 0.002
+  
+  prox_gtcabar_Ca: 0.0012
+  prox_gncabar_Ca: 0.0016
+  prox_glcabar_Ca: 0.0060
+
+  prox_gbar_BK: 0.009
+  prox_gbar_Kv723: 0.001
+  
+  hillock_gbar_Na: 0.1 #0.009
+  hillock_gmax_KA: 0.001
+  hillock_gbar_fKDR: 0.004
+
+  ais_gbar_Na: 0.4
+  ais_gmax_KA: 0.002
+  ais_gbar_fKDR: 0.002
+  
   axon_gbar_scale: 0.25
-
+  
+  prox_tau_Ca: 15.0
+    
 
 spike detector:
   section: axon

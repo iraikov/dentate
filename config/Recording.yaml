@@ -54,11 +54,15 @@ Intracellular:
     dt: 0.1
     reduce: True
     section quantity:
+      i:
+        swc types:
+          - soma
       v:
         swc types:
           - soma
           - hillock
           - ais
+          - axon
           - apical
           - basal
     synaptic quantity:
@@ -90,23 +94,23 @@ Intracellular:
           - axon
           - apical
           - basal
-      g_Na_Aradi:
+      g_Nav11a:
         swc types:
           - apical
       gk_Kir21:
         swc types:
           - apical
-      g_fKDR_Aradi:
+      gk_Kv11:
         swc types:
           - apical
-      g_KA_Aradi:
+      gk_Kv42:
         swc types:
           - apical
     synaptic quantity:
       i:
         syn types:
           - excitatory
-  Network clamp soma apical g exc synaptic:
+  Network clamp soma g exc synaptic:
     dt: 0.1
     reduce: True
     section quantity:
@@ -118,18 +122,49 @@ Intracellular:
           - axon
           - apical
           - basal
-      g_Na_Aradi:
+      g_Nav11a:
         swc types:
-          - apical
-      gk_Kir21:
+          - soma
+      g_Kv21:
         swc types:
-          - apical
-      g_fKDR_Aradi:
+          - soma
+      gak_BK:
         swc types:
-          - apical
-      g_KA_Aradi:
+          - soma
+      gabk_BK:
         swc types:
+          - soma
+    synaptic quantity:
+      i:
+        syn types:
+          - excitatory
+  Network clamp soma i exc synaptic:
+    dt: 0.1
+    reduce: True
+    section quantity:
+      v:
+        swc types:
+          - soma
+          - hillock
+          - ais
+          - axon
           - apical
+          - basal
+      ina_Nav11a:
+        swc types:
+          - soma
+      ik_Kv21:
+        swc types:
+          - soma
+      ik_BK:
+        swc types:
+          - soma
+      ik_sAHP:
+        swc types:
+          - soma
+      ica_Ca_Aradi:
+        swc types:
+          - soma
     synaptic quantity:
       i:
         syn types:

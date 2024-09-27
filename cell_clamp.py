@@ -757,11 +757,14 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
     mainlength = 50.0
 
     rules = {'sources': [presyn_name]}
-    if swc_type is not None:
+    if len(swc_type) > 0:
         rules['swc_types'] = swc_type
+    else:
+        rules['swc_types'] = ['apical']
     if syn_layer is not None:
         rules['layers'] = [syn_layer]
     syn_attrs = env.synapse_attributes
+    logger.info(f"synapse rules: {rules}")
     syn_filters = get_syn_filter_dict(env, rules=rules, convert=True)
     syns = syn_attrs.filter_synapses(biophys_cell.gid, **syn_filters)
 
@@ -882,6 +885,102 @@ def measure_psp (env, gid, pop_name, presyn_name, syn_mech_names, swc_type, v_in
 
     return  results
 
+
+
+def measure_vclamp (env, gid, pop_name, density_names, section_names, v_init, vclamp_holds, cell_dict={}, celsius=35., dt=0.025):
+
+    biophys_cell = init_biophys_cell(env, pop_name, gid, register_cell=False, load_weights=False, cell_dict=cell_dict)
+
+    hoc_cell = biophys_cell.hoc_cell
+
+    h.dt = env.dt
+
+    prelength = 200.0
+    stim_start = 50.0
+    mainlength = 250.0
+    postlength = 50.0
+
+    v_rec_dict = {}
+    origin = list(biophys_cell.hoc_cell.soma)[0]
+    sec_set = None
+    prefix = ""
+    if len(section_names) > 0:
+        prefix = section_names[0]
+        sec_set = set()
+    
+    for section_name in section_names:
+
+        sec_list = getattr(hoc_cell, section_name, [])
+        if isinstance(sec_list, h.SectionList):
+            sec_list = list(sec_list)
+        if not isinstance(sec_list, list):
+            sec_list = [sec_list]
+        
+        for sec in sec_list:
+            sec_set.add(sec)
+            if sec not in v_rec_dict:
+                v_rec = make_rec('vclamp{str(sec)}', pop_name, gid, biophys_cell.hoc_cell, sec=sec, dt=env.dt, loc=0.5,
+                                 param='v')
+            v_rec_dict[sec] = v_rec
+
+            
+    h.tstop = mainlength + prelength
+    h('objref nil, tlog')
+
+    h.tlog = h.Vector()
+    h.tlog.record (h._ref_t, env.dt)
+
+    all_results = {}
+    for vclamp_hold in vclamp_holds:
+        v_clamp_rest = v_init
+        v_clamp_hold = vclamp_hold
+        V_amp = np.asarray([v_clamp_rest, v_clamp_hold, v_clamp_rest])
+        V_ts  = np.asarray([prelength, prelength+mainlength, prelength+mainlength+postlength])
+
+        vclamp_results = run_vclamp(
+            hoc_cell,
+            V_amp,
+            V_ts,
+            sec_set=sec_set,
+            density_names=density_names,
+            v_init=v_init,
+            dt=dt,
+            celsius=celsius,
+        )
+        vec_t = np.asarray(h.tlog.to_python())
+        idx = np.argwhere(vec_t >= prelength-1.).reshape((-1,))
+        vec_t = vec_t[idx][1:]
+
+        results = {}
+        vclamp_vec_t = vclamp_results['t']
+        idx = np.argwhere(vclamp_vec_t >= prelength-1.).reshape((-1,))
+        all_qv_dict = {}
+        for q, sec_v_dict in vclamp_results['section quantities'].items():
+            for sec, v in sec_v_dict.items():
+                vec = v[idx]
+                if q in all_qv_dict:
+                    all_qv_dict[q].append(np.asarray(vec, dtype=np.float32))
+                else:
+                    all_qv_dict[q] = [np.asarray(vec, dtype=np.float32)]
+        for q, v_list in all_qv_dict.items():
+            v_array = np.vstack(v_list)
+            with np.errstate(under='ignore'):
+                results[f'{prefix} vclamp {q} mean'] = np.mean(v_array, axis=0)
+                results[f'{prefix} vclamp {q} variance'] = np.var(v_array, axis=0)
+        results[f'{prefix} vclamp t'] = np.asarray(vclamp_vec_t[idx], dtype=np.float32)
+
+        for k, v in results.items():
+            if k in all_results:
+                all_results[k].append(v)
+            else:
+                all_results[k] = [v]
+
+    results_dict = { k: np.concatenate(vs) for k, vs in all_results.items() }
+    
+    if gid in env.biophys_cells[pop_name]:
+        del env.biophys_cells[pop_name][gid]
+
+    return results_dict
 
 
 def measure_psc_vclamp (env, gid, pop_name, presyn_name, syn_mech_names, density_names, section_index, v_init, erev, vclamp_holds, syn_layer=None, weight=None, syn_count=1, stim_count=1, stim_interval=5., load_weights=False, cell_dict={}, celsius=35., dt=0.025):
@@ -1147,19 +1246,20 @@ def measure_transfer_impedance (gid, pop_name, v_init, env, cell_dict={}, swc_ty
 @click.option("--syn-count", type=int, default=1, help='synaptic count')
 @click.option("--syn-layer", type=str, help='synaptic layer name')
 @click.option("--swc-type", type=str, multiple=True, help='synaptic swc type')
-@click.option("--section-index", type=int, multiple=True, help='vclamp section index')
 @click.option("--stim-amp", type=float, default=0.1, help='current stimulus amplitude (nA)')
 @click.option("--stim-count", type=int, default=1, help='number of stimuli for PSP/PSC experiment')
 @click.option("--stim-interval", type=float, default=1.0, help='interval between stimuli for PSP/PSC experiment')
 @click.option("--stim-amp", type=float, default=0.1, help='current stimulus amplitude (nA)')
 @click.option("--impedance-freq", type=float, default=1.0, help='impedance frequency (Hz)')
-@click.option("--v-init", type=float, default=-75.0, help='initialization membrane potential (mV)')
+@click.option("--vclamp-section-name", '-s', required=False, type=str, multiple=True, help='vclamp section name')
+@click.option("--vclamp-section-index", type=int, multiple=True, help='vclamp PSC section index')
 @click.option("--vclamp-hold", type=float, multiple=True, help='command voltage for voltage clamp')
+@click.option("--v-init", type=float, default=-75.0, help='initialization membrane potential (mV)')
 @click.option("--dt", type=float, default=0.025, help='simulation timestep (ms)')
 @click.option("--use-cvode", is_flag=True)
 @click.option("--verbose", '-v', is_flag=True)
 
-def main(config, config_prefix, density_name, erev, population, presyn_name, gid, load_weights, measurements, template_paths, dataset_prefix, results_path, results_file_id, results_namespace_id, syn_distance_range, syn_mech_name, syn_weight, syn_count, syn_layer, swc_type, section_index, stim_amp, stim_count, stim_interval, impedance_freq, v_init, vclamp_hold, dt, use_cvode, verbose):
+def main(config, config_prefix, density_name, erev, population, presyn_name, gid, load_weights, measurements, template_paths, dataset_prefix, results_path, results_file_id, results_namespace_id, syn_distance_range, syn_mech_name, syn_weight, syn_count, syn_layer, swc_type, stim_amp, stim_count, stim_interval, impedance_freq, vclamp_section_index, vclamp_section_name, vclamp_hold, v_init, dt, use_cvode, verbose):
 
     config_logging(verbose)
         
@@ -1206,7 +1306,7 @@ def main(config, config_prefix, density_name, erev, population, presyn_name, gid
         assert(syn_mech_name is not None)
         assert(erev is not None)
         results_dict = measure_psc_vclamp (env, gid, population, presyn_name, syn_mech_name,
-                                           density_name, section_index, 
+                                           density_name, vclamp_section_index, 
                                            v_init, erev, vclamp_hold, syn_layer=syn_layer, syn_count=syn_count, 
                                            stim_count=stim_count, stim_interval=stim_interval,
                                            weight=syn_weight, load_weights=load_weights)
@@ -1214,10 +1314,19 @@ def main(config, config_prefix, density_name, erev, population, presyn_name, gid
         
         attr_dict[gid].update(results_dict)
 
+
     if 'transfer_impedance' in measurements:
         results_dict = measure_transfer_impedance (gid, population, v_init, env,
                                                    swc_types=swc_type,
                                                    transfer_impedance_freq=impedance_freq)
+        
+        attr_dict[gid].update(results_dict)
+        
+    if 'vclamp' in measurements:
+        results_dict = measure_vclamp (env, gid, population, density_name,
+                                       vclamp_section_name,
+                                       v_init, vclamp_hold)
+
         
         attr_dict[gid].update(results_dict)
 
