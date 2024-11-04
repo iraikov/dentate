@@ -250,7 +250,7 @@ def exchange_input_features(comm, requested_gids, input_features_attr_dict):
 @click.option("--non-structured-weights-namespace", type=str, default='Weights')
 @click.option("--non-structured-weights-path", required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False))
 @click.option("--arena-id", '-a', type=str, default='A')
-@click.option("--field-width-scale", type=float, default=1.1)
+@click.option("--field-width-scale", type=float, default=1.0)
 @click.option("--max-opt-iter", type=int, default=1000)
 @click.option("--max-weight-decay-fraction", type=float, default=1.)
 @click.option("--optimize-tol", type=float, default=1e-8)
@@ -326,6 +326,7 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
 
     LTD_weights_output_namespace = f'LTD {output_weights_namespace} {arena_id}'
     LTP_weights_output_namespace = f'LTP {output_weights_namespace} {arena_id}'
+    NMDA_LTP_weights_output_namespace = f'NMDA LTP {output_weights_namespace} {arena_id}'
     source_input_rank_output_namespace = f'Input Rank {output_weights_namespace} {arena_id}'
 
     this_input_features_namespaces = [f'{input_features_namespace} {arena_id}'
@@ -443,6 +444,7 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
 
     max_iter_count = max_dst_count
     output_features_dict = {}
+    NMDA_LTP_weights_output_dict = {}
     LTP_weights_output_dict = {}
     LTD_weights_output_dict = {}
     source_input_rank_output_dict = {}
@@ -608,6 +610,7 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
                                                     fig_kwargs={'gid': destination_gid,
                                                                 'field_width': target_field_width_dict[destination_gid]})
             input_rate_maps_by_source_gid_dict.clear()
+            NMDA_LTP_weights_dict = structured_weights_dict['NMDA_LTP_weights']
             LTP_delta_weights_dict = structured_weights_dict['LTP_delta_weights']
             LTD_delta_weights_dict = structured_weights_dict['LTD_delta_weights']
             arena_structured_map = structured_weights_dict['structured_activation_map']
@@ -627,6 +630,7 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
 
             this_structured_syn_id_count = structured_syn_id_count[destination_gid]
             output_syn_ids = np.full(this_structured_syn_id_count, -1, dtype='uint32', )
+            NMDA_LTP_weights_output = np.full(this_structured_syn_id_count, np.nan, dtype='float32')
             LTD_weights_output = np.full(this_structured_syn_id_count, np.nan, dtype='float32')
             LTP_weights_output = np.full(this_structured_syn_id_count, np.nan, dtype='float32')
             source_input_rank_output = np.full(this_structured_syn_id_count, np.nan, dtype='float32')
@@ -635,11 +639,13 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
             for source_gid in LTP_delta_weights_dict:
                  for syn_id in syn_ids_by_source_gid_dict[destination_gid][source_gid]:
                      output_syn_ids[i] = syn_id
+                     NMDA_LTP_weights_output[i] = NMDA_LTP_weights_dict[source_gid]
                      LTP_weights_output[i] = LTP_delta_weights_dict[source_gid]
                      LTD_weights_output[i] = LTD_delta_weights_dict[source_gid]
                      source_input_rank_output[i] = source_input_rank_dict[source_gid]
                      syn_sources_output[i] = source_gid_source_index_dict[source_gid]
                      i += 1
+            NMDA_LTP_weights_output_dict[destination_gid] = {'syn_id': output_syn_ids, 'NMDA': NMDA_LTP_weights_output}
             LTP_weights_output_dict[destination_gid] = {'syn_id': output_syn_ids, synapse_name: LTP_weights_output}
             LTD_weights_output_dict[destination_gid] = {'syn_id': output_syn_ids, synapse_name: LTD_weights_output}
             source_input_rank_output_dict[destination_gid]  = {'syn_id': output_syn_ids,
@@ -666,17 +672,22 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
         if write_size > 0:
             items = zip(split_every(write_size, LTD_weights_output_dict.items()), 
                         split_every(write_size, LTP_weights_output_dict.items()), 
+                        split_every(write_size, NMDA_LTP_weights_output_dict.items()), 
                         split_every(write_size, source_input_rank_output_dict.items()))
             for chunk in items:
                 LTD_weights_chunk = dict(chunk[0])
                 LTP_weights_chunk = dict(chunk[1])
-                source_input_rank_chunk = dict(chunk[2])
+                NMDA_LTP_weights_chunk = dict(chunk[2])
+                source_input_rank_chunk = dict(chunk[3])
 
                 append_cell_attributes(output_weights_path, destination, LTD_weights_chunk,
                                        namespace=LTD_weights_output_namespace, comm=env.comm, io_size=env.io_size,
                                        chunk_size=chunk_size, value_chunk_size=value_chunk_size)
                 append_cell_attributes(output_weights_path, destination, LTP_weights_chunk,
                                        namespace=LTP_weights_output_namespace, comm=env.comm, io_size=env.io_size,
+                                       chunk_size=chunk_size, value_chunk_size=value_chunk_size)
+                append_cell_attributes(output_weights_path, destination, NMDA_LTP_weights_chunk,
+                                       namespace=NMDA_LTP_weights_output_namespace, comm=env.comm, io_size=env.io_size,
                                        chunk_size=chunk_size, value_chunk_size=value_chunk_size)
                 append_cell_attributes(output_weights_path, destination, source_input_rank_chunk,
                                        namespace=source_input_rank_output_namespace, comm=env.comm, io_size=env.io_size,
@@ -688,6 +699,9 @@ def main(config, coordinates, field_width, gid, input_features_path, input_featu
                                    chunk_size=chunk_size, value_chunk_size=value_chunk_size)
             append_cell_attributes(output_weights_path, destination, LTP_weights_output_dict,
                                    namespace=LTP_weights_output_namespace, comm=env.comm, io_size=env.io_size,
+                                   chunk_size=chunk_size, value_chunk_size=value_chunk_size)
+            append_cell_attributes(output_weights_path, destination, NMDA_LTP_weights_output_dict,
+                                   namespace=NMDA_LTP_weights_output_namespace, comm=env.comm, io_size=env.io_size,
                                    chunk_size=chunk_size, value_chunk_size=value_chunk_size)
             append_cell_attributes(output_weights_path, destination, source_input_rank_output_dict,
                                    namespace=source_input_rank_output_namespace, comm=env.comm, io_size=env.io_size,

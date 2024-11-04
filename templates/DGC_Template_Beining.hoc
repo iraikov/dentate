@@ -1,0 +1,907 @@
+begintemplate DGC
+
+// GCL - granular layer dendrite
+// IML - proximal dendrite
+// MML - middle dendrite
+// OML - distal dendrite
+
+public all, soma, axon, allaxon, ais, hillock, apical, basal
+public nDends, nGCL, nIML, nMML, nOML
+public GCLidxs, IMLidxs, MMLidxs, OMLidxs
+public verbose
+public is_art, position, connect2target
+public xx, yy, zz
+
+verbose = 0
+id  = -1
+gid = -1
+
+create sections[1]
+
+objref GCLs, IMLs, MMLs, OMLs, all, soma, axon, allaxon, ais, hillock, apical, basal
+objref GCLidxs, IMLidxs, MMLidxs, OMLidxs
+objref apicalidx, basalidx, somaidx, axonidx, aisidx, hilidx
+objref pyenv
+
+iterator pyitr() {local i, k, x, n, sz localobj itr1, itrn
+    sz = $1
+    n = (numarg()-1) / 2
+    i = 1+n+1
+    itr1 = $oi
+    
+    for k = 0, sz-1 {
+        for x = 1, n {
+            i = 1+n+x
+            itrn = $oi
+            i = 1+x
+            $&i = itrn.__next__()
+        }
+        iterator_statement
+    }
+}
+                                
+proc assert() { local test strdef errmsg
+    
+    test = $1
+    errmsg = $s2
+    
+    if (!test) {
+        execerror ("Assertion failed: ", errmsg)
+    }
+}
+
+
+proc init() {
+    
+    gid = $1
+    
+    xx = 0
+    yy = 0
+    zz = 0
+    
+    pyenv = new PythonObject()
+    nrnpython("import numpy as np")
+    celldef($o3,$o4,$o5,$o6,$o7,$o8,$o9,$o10,$o11,$o12)
+}
+
+
+proc parameters() {
+    
+    celsius = 24
+    v_init = -75
+
+    //Passive properties
+    Ra0 = 200         //Ohm.cm
+    cm0 = 0.9         //uF/cm2
+    gpas = 1.38462e-05 //S/cm2
+    Rm0 = 1e-3/gpas   //kOhm.cm2
+    Epas = -80        //mV
+    EK = -93         //mV 
+    ENa  = 87.76
+    
+    cm_IML = 1.305
+    cm_MML = 1.71
+    cm_OML = 1.71
+
+    gpas_soma = gpas    
+    gpas_IML = 2.00769e-05
+    gpas_MML = 2.63076e-05
+    gpas_OML = 2.63076e-05
+    gpas_axon = 6.59341e-06
+    
+    Ra_axon = 100
+    
+    // Ca buffer
+    Ca_tau = 240
+    Ca_axon_tau = 43
+    
+    Ca_soma_brat = 200
+    Ca_dend_brat = 50
+    Ca_axon_brat = 10
+    
+    Ca_depth = 0.05
+    
+    cao0 = 2
+    cai0 = 4.8e-05
+    
+    // Kir21 conductance
+    Kir_gkbar = 0.000353903
+    Kir_mg_i = 4
+    Kir_spm_i = 1
+    Kir_gsub = 0.25
+    Kir_fac = 0.005
+    Kir_vshiftbs = 0
+    Kir_vshiftbb = 0
+    Kir_b = 0.105
+    Kir_shiftmg = 0.5
+    Kir_cas = 0.142857
+    Kir_As = 0.2
+    
+    Kir_axon_gkbar = 0.000168525
+    
+    // Kv42 conductance
+    Kv42_gkbar = 0.002175
+    Kv42_a0 = 0.416
+    Kv42_za = 1.1
+    Kv42_b0 = 0.0486
+    Kv42_zb = -1.556
+    Kv42_kco0 = 0.347
+    Kv42_zco = 0
+    Kv42_koc0 = 1.67
+    Kv42_zoc = 0
+    Kv42_kci = 0.04873
+    Kv42_kic = 0.000537
+    Kv42_koi = 0.0669
+    Kv42_kio = 0.04246
+    Kv42_vshift = -20
+    
+    Kv42_IML_gkbar = 0.00435
+    Kv42_MML_gkbar = 0.00435
+    Kv42_OML_gkbar = 0.00435
+    
+    // Kv11 conductance
+    Kv11_gkbar = 0.00025
+    Kv11_vshift = 0
+    
+    // Kv14 conductance
+    Kv14_gkbar = 0.001
+    Kv14_vshift = 0
+    
+    // Kv21 conductance
+    Kv21_gkbar = 0.00709091
+    
+    // Kv34 conductance
+    Kv34_gkbar = 0.00765625
+    Kv34_scale_a = 4
+    Kv34_ksl = 0.5
+    
+    // Kv723 conductance
+    Kv723_gkbar = 0.00134
+    Kv723_Dtaumult1 = 6
+    Kv723_Dtaumult2 = 6
+    Kv723_tau0mult = 0.2
+    
+    // Cav12 conductance
+    Cav12_gbar = 1e-05
+    Cav12_kf = 0.0005
+    Cav12_IML_gbar = 4e-05
+    Cav12_MML_gbar = 4e-05
+    Cav12_OML_gbar = 4e-05
+    
+    // Cav13 conductance
+    Cav13_gbar = 4e-06
+    Cav13_IML_gbar = 8e-06
+    Cav13_MML_gbar = 8e-06
+    Cav13_OML_gbar = 8e-06
+    
+    Cav13_soma_gbar = 1.6e-05
+
+    // Cav22 conductance
+    Cav22_gbar = 5e-05
+    Cav22_hTau = 80
+    Cav22_soma_gbar = 0.0003
+    
+    // Cav32 conductance
+    Cav32_gbar = 2.2e-05
+    Cav32_axon_gbar = 8e-06
+    
+    // BK conductance
+    BK_gabkbar = 0.0156
+    BK_gakbar = 0.0624
+    BK_diff = 100000
+    BK_base = 4
+    
+    BK_soma_gabkbar = 0.002 //0.0039
+    BK_soma_gakbar = 0.008 // 0.0156
+    BK_soma_diff = 1.5
+
+    // SK2 conductance
+    SK2_gkbar = 1.66667e-06
+    SK2_diff = 3
+    SK2_Q10 = 5
+    SK2_fac = 2.5
+    SK2_diro2 = 0.1
+    SK2_invc3 = 0.09
+    SK2_invc1 = 0.32
+    SK2_invc2 = 0.32
+    SK2_dirc4 = 320
+    
+    SK2_IML_gkbar = 4.375e-06
+    SK2_MML_gkbar = 4.375e-06
+    SK2_OML_gkbar = 4.375e-06
+    SK2_axon_gkbar = 1.25e-05
+    SK2_soma_gkbar = 8.33333e-07
+    
+    
+    // HCN conductance
+    HCN_cAMP = 0
+    HCN_e = -41.9
+    HCN_gbar = 4e-06
+    HCN_vhalfl = -100
+    HCN_kl = 8
+    HCN_vhalft = 30.4
+    HCN_at = 0.00052
+    HCN_bt = 0.2151
+    
+}
+
+proc celldef() {
+    
+    GCLidxs = new Vector()
+    IMLidxs  = new Vector()
+    MMLidxs  = new Vector()
+    OMLidxs  = new Vector()
+    
+    apicalidx = new Vector()
+    basalidx  = new Vector()
+    somaidx   = new Vector()
+    axonidx   = new Vector()
+    aisidx    = new Vector()
+    hilidx    = new Vector()
+    
+    parameters()
+    shape($o1,$o6,$o7,$o8,$o9)
+    topol($o1,$o2,$o3,$o4,$o5,$o10)
+//    geom()
+    subsets()
+    biophys()
+}
+
+
+
+proc biophys() {
+    
+    forsec all {
+    	insert Cabuffer
+	brat_Cabuffer = 50
+	tau_Cabuffer = 240
+	depth_Cabuffer = 0.05
+	insert ca_ion
+	cao0_ca_ion = 2
+	cai0_ca_ion = 4.8e-05
+        insert K_conc
+        insert Na_conc
+    }
+    
+    forsec GCLs {
+        
+        insert pas
+	cm = 0.9
+	Ra = 200
+	g_pas = 1.38462e-05
+	e_pas = -80
+        
+	insert Kir21
+	gkbar_Kir21 = 0.000353903
+	mg_i_Kir21 = 4
+	spm_i_Kir21 = 1
+	gsub_Kir21 = 0.25
+	fac_Kir21 = 0.005
+	vshiftbs_Kir21 = 0
+	vshiftbb_Kir21 = 0
+	b_Kir21 = 0.105
+	shiftmg_Kir21 = 0.5
+	cas_Kir21 = 0.142857
+	As_Kir21 = 0.2
+        
+	insert Kv42
+	gkbar_Kv42 = 0.002175
+	a0_Kv42 = 0.416
+	za_Kv42 = 1.1
+	b0_Kv42 = 0.0486
+	zb_Kv42 = -1.556
+	kco0_Kv42 = 0.347
+	zco_Kv42 = 0
+	koc0_Kv42 = 1.67
+	zoc_Kv42 = 0
+	kci_Kv42 = 0.04873
+	kic_Kv42 = 0.000537
+	koi_Kv42 = 0.0669
+	kio_Kv42 = 0.04246
+	vshift_Kv42 = -20
+        
+	insert Cav22
+	gbar_Cav22 = 5e-05
+        
+	insert Cav12
+	gbar_Cav12 = 1e-05
+	kf_Cav12 = 0.0005
+        
+	insert Cav13
+	gbar_Cav13 = 4e-06
+        
+	insert Cav32
+	gbar_Cav32 = 2.2e-05
+        
+	insert SK2
+	gkbar_SK2 = 1.66667e-06
+	diff_SK2 = 3
+	Q10_SK2 = 5
+	fac_SK2 = 2.5
+	diro2_SK2 = 0.1
+	invc3_SK2 = 0.09
+	invc1_SK2 = 0.32
+	invc2_SK2 = 0.32
+	dirc4_SK2 = 320
+        
+	insert Cabuffer
+	brat_Cabuffer = 50
+	tau_Cabuffer = 240
+	depth_Cabuffer = 0.05
+        
+    }
+    
+    forsec IMLs {
+        
+        insert pas
+	cm = 1.305
+	Ra = 200
+	g_pas = 2.00769e-05
+	e_pas = -80
+        
+	insert Kir21
+	gkbar_Kir21 = 0.000353903
+	mg_i_Kir21 = 4
+	spm_i_Kir21 = 1
+	gsub_Kir21 = 0.25
+	fac_Kir21 = 0.005
+	vshiftbs_Kir21 = 0
+	vshiftbb_Kir21 = 0
+	b_Kir21 = 0.105
+	shiftmg_Kir21 = 0.5
+	cas_Kir21 = 0.142857
+	As_Kir21 = 0.2
+        
+	insert HCN
+	cAMP_HCN = 0
+	e_HCN = -41.9
+	gbar_HCN = 4e-06
+	vhalfl_HCN = -100
+	kl_HCN = 8
+	vhalft_HCN = 30.4
+	at_HCN = 0.00052
+	bt_HCN = 0.2151
+        
+	insert Kv42
+	gkbar_Kv42 = 0.00435
+	a0_Kv42 = 0.416
+	za_Kv42 = 1.1
+	b0_Kv42 = 0.0486
+	zb_Kv42 = -1.556
+	kco0_Kv42 = 0.347
+	zco_Kv42 = 0
+	koc0_Kv42 = 1.67
+	zoc_Kv42 = 0
+	kci_Kv42 = 0.04873
+	kic_Kv42 = 0.000537
+	koi_Kv42 = 0.0669
+	kio_Kv42 = 0.04246
+	vshift_Kv42 = -20
+        
+	insert Cav22
+	gbar_Cav22 = 5e-05
+	hTau_Cav22 = 80
+        
+	insert Cav12
+	gbar_Cav12 = 4e-05
+	kf_Cav12 = 0.0005
+        
+	insert Cav13
+	gbar_Cav13 = 8e-06
+	kf_Cav13 = 0.0005
+        
+	insert Cav32
+	gbar_Cav32 = 2.2e-05
+        
+	insert SK2
+	gkbar_SK2 = 4.375e-06
+	diff_SK2 = 3
+	Q10_SK2 = 5
+	fac_SK2 = 2.5
+	diro2_SK2 = 0.1
+	invc3_SK2 = 0.09
+	invc1_SK2 = 0.32
+	invc2_SK2 = 0.32
+	dirc4_SK2 = 320
+        
+	insert Cabuffer
+	brat_Cabuffer = 50
+	tau_Cabuffer = 240
+	depth_Cabuffer = 0.05
+        
+    }
+    
+    forsec MMLs {
+        insert pas
+	cm = 1.71
+	Ra = 200
+	g_pas = 2.63076e-05
+	e_pas = -80
+        
+	insert Kir21
+	gkbar_Kir21 = 0.000353903
+	mg_i_Kir21 = 4
+	spm_i_Kir21 = 1
+	gsub_Kir21 = 0.25
+	fac_Kir21 = 0.005
+	vshiftbs_Kir21 = 0
+	vshiftbb_Kir21 = 0
+	b_Kir21 = 0.105
+	shiftmg_Kir21 = 0.5
+	cas_Kir21 = 0.142857
+	As_Kir21 = 0.2
+        
+	insert HCN
+	cAMP_HCN = 0
+	e_HCN = -41.9
+	gbar_HCN = 4e-06
+	vhalfl_HCN = -100
+	kl_HCN = 8
+	vhalft_HCN = 30.4
+	at_HCN = 0.00052
+	bt_HCN = 0.2151
+        
+	insert Kv42
+	gkbar_Kv42 = 0.00435
+	a0_Kv42 = 0.416
+	za_Kv42 = 1.1
+	b0_Kv42 = 0.0486
+	zb_Kv42 = -1.556
+	kco0_Kv42 = 0.347
+	zco_Kv42 = 0
+	koc0_Kv42 = 1.67
+	zoc_Kv42 = 0
+	kci_Kv42 = 0.04873
+	kic_Kv42 = 0.000537
+	koi_Kv42 = 0.0669
+	kio_Kv42 = 0.04246
+	vshift_Kv42 = -20
+        
+	insert Cav22
+	gbar_Cav22 = 5e-05
+	hTau_Cav22 = 80
+        
+	insert Cav12
+	gbar_Cav12 = 4e-05
+	kf_Cav12 = 0.0005
+        
+	insert Cav13
+	gbar_Cav13 = 8e-06
+	kf_Cav13 = 0.0005
+        
+	insert Cav32
+	gbar_Cav32 = 2.2e-05
+        
+	insert SK2
+	gkbar_SK2 = 4.375e-06
+	diff_SK2 = 3
+	Q10_SK2 = 5
+	fac_SK2 = 2.5
+	diro2_SK2 = 0.1
+	invc3_SK2 = 0.09
+	invc1_SK2 = 0.32
+	invc2_SK2 = 0.32
+	dirc4_SK2 = 320
+        
+	insert Cabuffer
+	brat_Cabuffer = 50
+	tau_Cabuffer = 240
+	depth_Cabuffer = 0.05
+
+    }
+    
+    forsec OMLs {
+	insert pas
+	cm = 1.71
+	Ra = 200
+	g_pas = 2.63076e-05
+	e_pas = -80
+        
+	insert Kir21
+	gkbar_Kir21 = 0.000353903
+	mg_i_Kir21 = 4
+	spm_i_Kir21 = 1
+	gsub_Kir21 = 0.25
+	fac_Kir21 = 0.005
+	vshiftbs_Kir21 = 0
+	vshiftbb_Kir21 = 0
+	b_Kir21 = 0.105
+	shiftmg_Kir21 = 0.5
+	cas_Kir21 = 0.142857
+	As_Kir21 = 0.2
+        
+	insert HCN
+	cAMP_HCN = 0
+	e_HCN = -41.9
+	gbar_HCN = 4e-06
+	vhalfl_HCN = -100
+	kl_HCN = 8
+	vhalft_HCN = 30.4
+	at_HCN = 0.00052
+	bt_HCN = 0.2151
+        
+	insert Kv42
+	gkbar_Kv42 = 0.00435
+	a0_Kv42 = 0.416
+	za_Kv42 = 1.1
+	b0_Kv42 = 0.0486
+	zb_Kv42 = -1.556
+	kco0_Kv42 = 0.347
+	zco_Kv42 = 0
+	koc0_Kv42 = 1.67
+	zoc_Kv42 = 0
+	kci_Kv42 = 0.04873
+	kic_Kv42 = 0.000537
+	koi_Kv42 = 0.0669
+	kio_Kv42 = 0.04246
+	vshift_Kv42 = -20
+        
+	insert Cav22
+	gbar_Cav22 = 5e-05
+	hTau_Cav22 = 80
+        
+	insert Cav12
+	gbar_Cav12 = 4e-05
+	kf_Cav12 = 0.0005
+        
+	insert Cav13
+	gbar_Cav13 = 8e-06
+	kf_Cav13 = 0.0005
+        
+	insert Cav32
+	gbar_Cav32 = 2.2e-05
+        
+	insert SK2
+	gkbar_SK2 = 4.375e-06
+	diff_SK2 = 3
+	Q10_SK2 = 5
+	fac_SK2 = 2.5
+	diro2_SK2 = 0.1
+	invc3_SK2 = 0.09
+	invc1_SK2 = 0.32
+	invc2_SK2 = 0.32
+	dirc4_SK2 = 320
+        
+	insert Cabuffer
+	brat_Cabuffer = 50
+	tau_Cabuffer = 240
+	depth_Cabuffer = 0.05
+        
+    }
+    
+    forsec soma {
+	insert pas
+	cm = 0.9
+	Ra = 200
+	g_pas = 1.38462e-05
+	e_pas = -80
+	insert Kir21
+	gkbar_Kir21 = 0.000353903
+	mg_i_Kir21 = 4
+	spm_i_Kir21 = 1
+	gsub_Kir21 = 0.25
+	fac_Kir21 = 0.005
+	vshiftbs_Kir21 = 0
+	vshiftbb_Kir21 = 0
+	b_Kir21 = 0.105
+	shiftmg_Kir21 = 0.5
+	cas_Kir21 = 0.142857
+	As_Kir21 = 0.2
+        insert Na_Aradi
+        gmax_Na_Aradi = 0.088
+	insert Kv21
+	gkbar_Kv21 = 0.00709091
+	insert Cabuffer
+	brat_Cabuffer = 200
+	tau_Cabuffer = 240
+	insert Cav22
+	gbar_Cav22 = 0.0003
+	hTau_Cav22 = 80
+	insert Cav12
+	gbar_Cav12 = 2e-05
+	kf_Cav12 = 0.0005
+	insert Cav13
+	gbar_Cav13 = 1.6e-05
+	kf_Cav13 = 0.0005
+	insert Cav32
+	gbar_Cav32 = 2.2e-05
+	insert BK
+	gabkbar_BK = 0.0039
+	gakbar_BK = 0.0156
+	diff_BK = 1.5
+	base_BK = 4
+	insert SK2
+	gkbar_SK2 = 8.33333e-07
+	diff_SK2 = 3
+	Q10_SK2 = 5
+	fac_SK2 = 2.5
+	diro2_SK2 = 0.1
+	invc3_SK2 = 0.09
+	invc1_SK2 = 0.32
+	invc2_SK2 = 0.32
+	dirc4_SK2 = 320
+        
+    }
+    
+    forsec allaxon {
+        insert pas
+	cm = 0.9
+	Ra = 100
+	g_pas = 6.59341e-06
+	e_pas = -80
+	insert Kir21
+	gkbar_Kir21 = 0.000168525
+	mg_i_Kir21 = 4
+	spm_i_Kir21 = 1
+	gsub_Kir21 = 0.25
+	fac_Kir21 = 0.005
+	vshiftbs_Kir21 = 0
+	vshiftbb_Kir21 = 0
+	b_Kir21 = 0.105
+	shiftmg_Kir21 = 0.5
+	cas_Kir21 = 0.142857
+	As_Kir21 = 0.2
+        insert Na_Aradi
+	gbar_na8st = 0.088128
+	insert Kv11
+	gkbar_Kv11 = 0.00025
+	vshift_Kv11 = 0
+	insert Kv14
+	gkbar_Kv14 = 0.001
+	vshift_Kv14 = 0
+	insert Kv34
+	gkbar_Kv34 = 0.00765625
+	scale_a_Kv34 = 4
+	ksl_Kv34 = 0.5
+	insert Kv723
+	gkbar_Kv723 = 0.00134
+	Dtaumult1_Kv723 = 6
+	Dtaumult2_Kv723 = 6
+	tau0mult_Kv723 = 0.2
+	insert Cabuffer
+	brat_Cabuffer = 10
+	tau_Cabuffer = 43
+	insert Cav22
+	gbar_Cav22 = 5e-05
+	hTau_Cav22 = 80
+	insert Cav13
+	gbar_Cav13 = 4e-06
+	kf_Cav13 = 0.0005
+	insert Cav32
+	gbar_Cav32 = 8e-06
+	insert BK
+	gabkbar_BK = 0.0156
+	gakbar_BK = 0.0624
+	diff_BK = 100000
+	base_BK = 4
+	insert SK2
+	gkbar_SK2 = 1.25e-05
+	diff_SK2 = 3
+	Q10_SK2 = 5
+	fac_SK2 = 2.5
+	diro2_SK2 = 0.1
+	invc3_SK2 = 0.09
+	invc1_SK2 = 0.32
+	invc2_SK2 = 0.32
+	dirc4_SK2 = 320
+
+  }
+  
+
+
+}
+
+func is_art()  { return 0 }
+
+proc position() { local i
+    
+    forsec soma {
+        for i = 0, n3d()-1 {
+            pt3dchange(i, $1-xx+x3d(i), $2-yy+y3d(i), $3-zz+z3d(i), diam3d(i))
+        }
+    }
+    xx = $1  yy = $2  zz = $3
+}
+
+
+
+proc topol_from_python() { local i,j,l,p,s,p_layer,loc,vlen localobj vsrc, vdst, vloc, secnodes, layers, swc_types
+    
+    secnodes = $o1
+    layers   = $o2
+    
+    vlen     = $o3.size
+    vsrc     = pyenv.iter($o3)
+    vdst     = pyenv.iter($o4)
+    vloc     = pyenv.iter($o5)
+    swc_types = $o6
+    
+    nDends = 0
+    nSoma  = 0
+    nAxon  = 0
+    nAIS   = 0
+    nHill  = 0
+    
+    for s=0, secnodes.__len__()-1 {
+        
+        p = secnodes.__getitem__(s)._[-1]
+        p_layer = layers._[p]
+        
+        if (p_layer == 1) {
+            GCLidxs.append(s)
+        } else if (p_layer == 2) {
+            IMLidxs.append(s)
+        } else if (p_layer == 3) {
+            MMLidxs.append(s)
+        } else if (p_layer >= 4) {
+            OMLidxs.append(s)
+        }
+        
+        swc_type = swc_types._[p]
+        if (swc_type == 4) {
+            nDends = nDends + 1
+            apicalidx.append(s)
+        }
+        if (swc_type == 8) {
+            hilidx.append(s)
+            nHill = nHill + 1
+            nAxon = nAxon + 1
+        }
+        if (swc_type == 7) {
+            aisidx.append(s)
+            nAIS = nAIS + 1
+            nAxon = nAxon + 1
+        }
+        if (swc_type == 2) {
+            axonidx.append(s)
+            nAxon = nAxon + 1
+        }
+        if (swc_type == 1) {
+            somaidx.append(s)
+            nSoma = nSoma + 1
+        }
+        
+    }
+    
+    nGCL  = GCLidxs.size()
+    nIML    = IMLidxs.size()
+    nMML    = MMLidxs.size()
+    nOML    = OMLidxs.size()
+    
+    if (verbose) {
+
+        print "soma compartment indices = "
+        somaidx.printf()
+        print "GCL compartment indices = "
+        GCLidxs.printf()
+        print "IML compartment indices = "
+        IMLidxs.printf()
+        print "MML compartment indices = "
+        MMLidxs.printf()
+        print "OML compartment indices = "
+        OMLidxs.printf()
+        printf ("Total number of dendritic compartments = %d\n", nDends)
+    }
+    
+    for pyitr (vlen, &i, &j, &l, vsrc, vdst, vloc) {
+        assert (i >= 0,  "compartment index in topology matrix is less than zero")
+        assert (j >= 0,  "compartment index in topology matrix is less than zero")
+        assert (i < nDends+nSoma+nAxon+1,  "compartment index in topology matrix is greater than the number of compartments")
+        assert (j < nDends+nSoma+nAxon+1,  "compartment index in topology matrix is greater than the number of compartments")
+        sections[i] loc = arc3d(l) / L 
+        connect sections[j](0),sections[i](loc)
+        
+    }
+    
+}
+
+
+proc topol() { local i
+    
+    topol_from_python($o1,$o2,$o3,$o4,$o5,$o6)
+    
+}
+
+proc shape() {
+    
+    shape_from_python($o1,$o2,$o3,$o4,$o5)
+    
+}
+
+
+proc shape_from_python() { local x,y,z,r,s,p localobj secnodes, pidxs, vx, vy, vz, vradius
+    
+    secnodes = $o1
+    vx = $o2
+    vy = $o3
+    vz = $o4
+    vradius = $o5
+    
+    create sections[secnodes.__len__()]
+    for s=0, secnodes.__len__()-1 {
+        pidxs = secnodes.__getitem__(s)
+        sections[s] {
+            pt3dconst(0)
+            for pyitr (pidxs.size, &p, pyenv.iter(pidxs)) {
+                
+                x = vx._[p]
+                y = vy._[p]
+                z = vz._[p]
+                r = vradius._[p]
+
+                pt3dadd(x, y, z, 2*r)
+            }
+        }
+    }
+    
+}
+
+
+
+proc subsets() { local i localobj sref
+    
+  GCLs  = new SectionList()
+  IMLs    = new SectionList()
+  MMLs    = new SectionList()
+  OMLs    = new SectionList()
+  apical = new SectionList()
+  basal  = new SectionList()
+  soma   = new SectionList()
+  axon   = new SectionList()
+  allaxon = new SectionList()
+  ais    = new SectionList()
+  hillock = new SectionList()
+  all    = new SectionList()
+  
+  for i=0, apicalidx.size()-1 {
+      sections[apicalidx.x[i]] {
+          apical.append()
+          all.append()
+      }
+  }
+  
+  for i=0, nGCL-1 sections[GCLidxs.x[i]] GCLs.append()
+  for i=0, nIML-1 sections[IMLidxs.x[i]] IMLs.append()
+  for i=0, nMML-1 sections[MMLidxs.x[i]] MMLs.append()
+  for i=0, nOML-1 sections[OMLidxs.x[i]] OMLs.append()
+  
+  if (hilidx.size() > 0) {
+      for i=0, hilidx.size()-1 {
+          sections[hilidx.x[i]] {
+              hillock.append()
+              allaxon.append()
+              all.append()
+          }
+      }
+  }
+  if (aisidx.size() > 0) {
+      for i=0, aisidx.size()-1 {
+          sections[aisidx.x[i]] {
+              ais.append()
+              allaxon.append()
+              all.append()
+          }
+      }
+  }
+  
+  for i=0, axonidx.size()-1 {
+      sections[axonidx.x[i]] {
+          axon.append()
+          allaxon.append()
+          all.append()
+      }
+  }
+  
+  soma = new SectionList() 
+  for i=0, somaidx.size()-1 {
+      sections[somaidx.x[i]] {
+          soma.append()
+          all.append()
+      }
+  }
+  
+}
+
+
+
+endtemplate DGC

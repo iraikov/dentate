@@ -1,0 +1,33 @@
+axon: {}
+apical:
+  synapses:
+    NMDA:
+      gVI:
+        - filters:
+            layers: [IML]
+            syn_types: [excitatory]
+          value: 0.00009
+        - filters:
+            syn_types: [excitatory]
+          value: 0.00011
+      tau1:
+        filters:
+          syn_types:
+          - excitatory
+        value: 1.4731
+      tau2:
+        filters:
+          syn_types:
+          - excitatory
+        value: 391.64
+      K0:
+        filters:
+          syn_types:
+          - excitatory
+        value: 4.1
+      delta:
+        filters:
+          syn_types:
+          - excitatory
+        value: 0.8
+

@@ -1452,3 +1452,22 @@ def generate_results_file_id(population, gid=None, seed=None):
         results_file_id = f"{results_file_id_prefix}_{seed:08d}"
     return results_file_id
 
+
+def dfs_inorder_nodes(G, source):
+    """Perform an inorder-like DFS traversal on a NetworkX graph."""
+
+    visited = set()
+    stack = [(source, iter(G.neighbors(source)))]
+
+    while stack:
+        node, neighbors = stack[-1]
+        if node not in visited:
+            visited.add(node)
+            yield node
+
+        try:
+            child = next(neighbors)
+            if child not in visited:
+                stack.append((child, iter(G.neighbors(child))))
+        except StopIteration:
+            stack.pop()

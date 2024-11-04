@@ -1,12 +1,12 @@
 Network Clamp:  !include Network_Clamp.yaml
-Model Name: Single_GC_Exc_Sat_SynExp3NMDA2SGfdb_SLN_CLS_IN_PR_gid_601886
+Model Name: Single_GC_Exc_Sat_SynExp3NMDA2SGfdb_SLN_NMDA_IN_PR_gid_601886
 Dataset Name: Single
 Definitions: !include Definitions.yaml
 Global Parameters: !include Global.yaml
 Geometry: !include Geometry.yaml
 Random Seeds: !include Random.yaml
-Cell Data: data_601886_cls_100_20241028.h5
-Connection Data: data_601886_cls_100_20241028.h5
+Cell Data: data_601886_str_20241009.h5
+Connection Data: data_601886_str_20241009.h5
 #Cell Data: dentatenet_Slice_SLN_center_pf_20230315.h5
 #Connection Data: dentatenet_Slice_SLN_center_pf_20230315.h5
 #Gap Junction Data: DG_gapjunctions_20191112.h5
@@ -22,8 +22,7 @@ Cell Types:
     mechanism file: DG_GC_SynExp3NMDA2SGfdb_gid_601886_mech.yaml
     synapses:
       correct_for_spines: True
-      weights: !include GC_SLN_weights.yaml
-      clusters: !include GC_SLN_clusters.yaml
+      weights: !include GC_SLN_NMDA_weights.yaml
       density: !include GC_synapse_density.yaml
   MC:
     template: PRS_nrn

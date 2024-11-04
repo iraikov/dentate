@@ -77,12 +77,13 @@ Intracellular:
         swc types:
           - soma
           - ais
+          - axon
           - hillock
           - apical
           - basal
     synaptic quantity:
       i: {}
-  Network clamp apical g exc synaptic:
+  Network clamp apical g synaptic:
     dt: 0.1
     reduce: True
     section quantity:
@@ -110,6 +111,70 @@ Intracellular:
       i:
         syn types:
           - excitatory
+  Network clamp apical i synaptic:
+    dt: 0.1
+    reduce: True
+    section quantity:
+      v:
+        swc types:
+          - soma
+          - hillock
+          - ais
+          - axon
+          - apical
+          - basal
+      ina:
+        swc types:
+          - apical
+      ik:
+        swc types:
+          - apical
+      ica:
+        swc types:
+          - apical
+    synaptic quantity:
+      i:
+        syn types:
+          - excitatory
+          - inhibitory
+  Network clamp all i synaptic:
+    dt: 0.1
+    reduce: True
+    section quantity:
+      v:
+        swc types:
+          - soma
+          - hillock
+          - ais
+          - axon
+          - apical
+          - basal
+      ina:
+        swc types:
+          - apical
+          - soma
+          - hillock
+          - ais
+          - axon
+      ik:
+        swc types:
+          - apical
+          - soma
+          - hillock
+          - ais
+          - axon
+      ica:
+        swc types:
+          - apical
+          - soma
+          - hillock
+          - ais
+          - axon
+    synaptic quantity:
+      i:
+        syn types:
+          - excitatory
+          - inhibitory
   Network clamp soma g exc synaptic:
     dt: 0.1
     reduce: True
@@ -138,7 +203,7 @@ Intracellular:
       i:
         syn types:
           - excitatory
-  Network clamp soma i exc synaptic:
+  Network clamp soma i synaptic:
     dt: 0.1
     reduce: True
     section quantity:

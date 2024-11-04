@@ -39,6 +39,7 @@ mpi_op_merge_dict = MPI.Op.Create(merge_dict, commute=True)
 @click.option("--synapse-attributes-path", required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False))
 @click.option("--structured-weights-path", required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False))
 @click.option("--synapse-clusters-path", required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False))
+@click.option("--synapse-clusters-namespace", required=False, default="Synapse Clusters")
 @click.option("--populations", '-i', required=True, multiple=True, type=str)
 @click.option("--arena-id", type=str)
 @click.option("--io-size", type=int, default=-1)
@@ -47,14 +48,16 @@ mpi_op_merge_dict = MPI.Op.Create(merge_dict, commute=True)
 @click.option("--write-size", type=int, default=0)
 @click.option("--cluster-write-size", type=int, default=0)
 @click.option("--cluster-syn-count-max", type=int, default=50)
+@click.option("--cluster-syn-count-slope", type=float, default=0.25)
+@click.option("--cluster-syn-count-offset", type=int, default=20)
 @click.option("--attr-gen-cache-size", type=int, default=10)
 @click.option("--cluster-selection-method", "-m", type=str, default='random')
 @click.option("--solver-path", type=str, default=None)
 @click.option("--verbose", "-v", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--debug", is_flag=True)
-def main(config, config_prefix, template_path, output_path, forest_path, synapse_attributes_path, structured_weights_path, synapse_clusters_path, populations, arena_id, io_size, chunk_size, value_chunk_size,
-         write_size, cluster_write_size, cluster_syn_count_max, attr_gen_cache_size, cluster_selection_method, solver_path, verbose, dry_run, debug):
+def main(config, config_prefix, template_path, output_path, forest_path, synapse_attributes_path, structured_weights_path, synapse_clusters_path, synapse_clusters_namespace, populations, arena_id, io_size, chunk_size, value_chunk_size,
+         write_size, cluster_write_size, cluster_syn_count_max, cluster_syn_count_slope, cluster_syn_count_offset, attr_gen_cache_size, cluster_selection_method, solver_path, verbose, dry_run, debug):
     """
 
     :param config:
@@ -105,8 +108,8 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
         env.comm.barrier()
 
     input_rank_namespace = f"Input Rank Structured Weights {arena_id}"
-    syn_clusters_namespace = f"Synapse Clusters {arena_id}"
-    syn_cluster_centers_namespace = f"Synapse Cluster Centers {arena_id}"
+    syn_clusters_namespace = f"{synapse_clusters_namespace} {arena_id}"
+    syn_cluster_centers_namespace = f"{synapse_clusters_namespace} Centers {arena_id}"
     
     (pop_ranges, _) = read_population_ranges(forest_path, comm=env.comm)
 
@@ -410,22 +413,37 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
                 cell_secidx_dict = cell_dicts[this_gid]['secidx_dict']
                 cell_morph_dict = cell_dicts[this_gid]['morph_dict']
 
-                if cluster_selection_method == 'topological':
-                    syn_dict, seg_density_per_sec = synapses.distribute_topological_poisson_synapses(this_gid, random_seed, env.Synapse_Types,
-                                                                                                     env.SWC_Types, env.layers,
-                                                                                                     density_config_dict, cell_morph_dict,
-                                                                                                     cell_sec_dict, cell_secidx_dict,
-                                                                                                     syn_cluster_attrs_dict,
-                                                                                                     syn_cluster_centers_dict,
-                                                                                                     cluster_syn_count_max=cluster_syn_count_max)
+                if cluster_selection_method == 'topological_gradient':
+                    syn_dict, seg_density_per_sec = \
+                        synapses.distribute_topological_gradient_poisson_synapses(this_gid, random_seed,
+                                                                                  env.Synapse_Types,
+                                                                                  env.SWC_Types, env.layers,
+                                                                                  density_config_dict,
+                                                                                  cell_morph_dict,
+                                                                                  cell_sec_dict, cell_secidx_dict,
+                                                                                  syn_cluster_attrs_dict,
+                                                                                  syn_cluster_centers_dict,
+                                                                                  cluster_syn_count_offset=cluster_syn_count_offset,
+                                                                                  cluster_syn_count_slope=cluster_syn_count_slope,
+                                                                                  cluster_syn_count_max=cluster_syn_count_max)
+                elif cluster_selection_method == 'topological':
+                    syn_dict, seg_density_per_sec = \
+                        synapses.distribute_topological_poisson_synapses(this_gid, random_seed, env.Synapse_Types,
+                                                                         env.SWC_Types, env.layers,
+                                                                         density_config_dict, cell_morph_dict,
+                                                                         cell_sec_dict, cell_secidx_dict,
+                                                                         syn_cluster_attrs_dict,
+                                                                         syn_cluster_centers_dict,
+                                                                         cluster_syn_count_max=cluster_syn_count_max)
                 else:
-                    syn_dict, seg_density_per_sec = synapses.distribute_clustered_poisson_synapses(random_seed, env.Synapse_Types,
-                                                                                                   env.SWC_Types, env.layers,
-                                                                                                   density_config_dict, cell_morph_dict,
-                                                                                                   cell_sec_dict, cell_secidx_dict,
-                                                                                                   syn_cluster_attrs_dict,
-                                                                                                   syn_cluster_centers_dict,
-                                                                                                   cluster_syn_count_max=cluster_syn_count_max)
+                    syn_dict, seg_density_per_sec = \
+                        synapses.distribute_clustered_poisson_synapses(random_seed, env.Synapse_Types,
+                                                                       env.SWC_Types, env.layers,
+                                                                       density_config_dict, cell_morph_dict,
+                                                                       cell_sec_dict, cell_secidx_dict,
+                                                                       syn_cluster_attrs_dict,
+                                                                       syn_cluster_centers_dict,
+                                                                       cluster_syn_count_max=cluster_syn_count_max)
 
                 assert(len(syn_dict['syn_ids']) == num_syns)
                 if debug:
@@ -444,7 +462,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
             
             if (not dry_run) and (write_size > 0) and (i % write_size == 0):
                 append_cell_attributes(output_path, population, gid_synapse_dict,
-                                       namespace=f'Clustered Synapse Attributes {arena_id}', 
+                                       namespace=f'{synapse_clusters_namespace} Synapse Attributes {arena_id}', 
                                        comm=env.comm, io_size=io_size, 
                                        chunk_size=chunk_size, 
                                        value_chunk_size=value_chunk_size)
@@ -457,7 +475,7 @@ def main(config, config_prefix, template_path, output_path, forest_path, synapse
         env.comm.barrier()
         if not dry_run:
             append_cell_attributes(output_path, population, gid_synapse_dict,
-                                   namespace=f'Clustered Synapse Attributes {arena_id}', 
+                                   namespace=f'{synapse_clusters_namespace} Synapse Attributes {arena_id}', 
                                    comm=env.comm, io_size=io_size, 
                                    chunk_size=chunk_size, 
                                    value_chunk_size=value_chunk_size)

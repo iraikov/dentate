@@ -40,6 +40,8 @@ for fname in sys.argv[1:]:
     ina_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ina variance"]["Attribute Value"][:]
     i_Kir = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kir21 mean"]["Attribute Value"][:]
     i_Kir_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kir21 variance"]["Attribute Value"][:]
+    i_HCN = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_HCN mean"]["Attribute Value"][:]
+    i_HCN_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp i_HCN variance"]["Attribute Value"][:]
     i_KA = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv42 mean"]["Attribute Value"][:]
     i_KA_var = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv42 variance"]["Attribute Value"][:]
     i_fKDR = f["Populations"]["GC"]["Cell Clamp Results"][f"{grp} vclamp ik_Kv11 mean"]["Attribute Value"][:]
@@ -70,6 +72,7 @@ for fname in sys.argv[1:]:
     i_KA_ints = []
     i_fKDR_ints = []
     i_sKDR_ints = []
+    i_HCN_ints = []
     ina_ints = []
     for n, part in enumerate(parts):
         vclamp_part = vclamp_parts[n]
@@ -85,6 +88,9 @@ for fname in sys.argv[1:]:
         if i_sKDR is not None:
             i_sKDR_int = integrate.simpson(i_sKDR[vclamp_part][vclamp_period_idxs], x=vclamp_t[vclamp_part][vclamp_period_idxs])
     
+        i_HCN_int = integrate.simpson(i_HCN[vclamp_part][vclamp_period_idxs], x=vclamp_t[vclamp_part][vclamp_period_idxs])
+
+        
         i_ints.append(i_int)
         ik_ints.append(ik_int)
         ina_ints.append(ina_int)
@@ -94,9 +100,12 @@ for fname in sys.argv[1:]:
         if i_sKDR is not None:
             i_sKDR_ints.append(i_sKDR_int)
 
+        i_HCN_ints.append(i_HCN_int)
+            
     q_dict = { 'i_int': i_ints,
                'ik_int': ik_ints,
                'ina_int': ina_ints,
+               'i_HCN_int': i_HCN_ints,
                'i_Kir_int': i_Kir_ints,
                'i_KA_int': i_KA_ints,
                'i_fKDR_int': i_fKDR_ints,
@@ -114,13 +123,13 @@ V_hold_levels = df["V_hold"].unique()
 int_amp_mean_vars = []
 
 q_names = [ "i_int", "ik_int", "ina_int", "i_int_amp",
-            "i_Kir_int", "i_KA_int", "i_fKDR_int", ]
+            "i_HCN_int", "i_Kir_int", "i_KA_int", "i_fKDR_int", ]
 if i_sKDR is not None:
     q_names.append("i_sKDR_int")
 for V_hold in V_hold_levels:
 
     sub_df = df.loc[df["V_hold"] == V_hold]
-    i_int_amp = sub_df[["i_int", "ik_int", "ina_int"]].sum(axis=1)
+    i_int_amp = sub_df[["i_int", "ik_int", "i_HCN_int", "ina_int"]].sum(axis=1)
     sub_df.insert(loc=0, column='i_int_amp', value=i_int_amp)
     q_means = []
     q_vars  = []
@@ -148,7 +157,7 @@ axs[0].set_ylabel("Charge Transfer [uC]")
 axs[0].set_xlabel("Voltage [mV]")
 
 display_q_names = ["i_int", "ik_int", "ina_int",
-                   "i_Kir_int", "i_KA_int", "i_fKDR_int"]
+                   "i_HCN_int", "i_Kir_int", "i_KA_int", "i_fKDR_int"]
 
 if i_sKDR is not None:
     display_q_names.append("i_sKDR_int")

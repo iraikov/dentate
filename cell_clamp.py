@@ -1285,7 +1285,6 @@ def main(config, config_prefix, density_name, erev, population, presyn_name, gid
     if 'ap' in measurements:
         attr_dict[gid].update(measure_ap(gid, population, v_init, env))
     if 'ap_rate' in measurements:
-        logger.info('ap_rate')
         attr_dict[gid].update(measure_ap_rate(gid, population, v_init, env, stim_amp=stim_amp))
     if 'fi' in measurements:
         attr_dict[gid].update(measure_fi(gid, population, v_init, env))

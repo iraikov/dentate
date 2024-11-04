@@ -1,7 +1,7 @@
 Firing Rate Inference:
   Temporal Resolution: 1.  # ms
-  BAKS Alpha: 1.5
-  BAKS Beta: 0.42
+  BAKS Alpha: 10.0
+  BAKS Beta: 0.5
   Pad Duration: 1000.  # ms
 
 Mutual Information:

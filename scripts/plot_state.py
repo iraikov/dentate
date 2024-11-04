@@ -18,6 +18,7 @@ script_name = os.path.basename(__file__)
 @click.option("--t-max", type=float)
 @click.option("--t-min", type=float)
 @click.option("--font-size", type=float, default=14)
+@click.option("--fig-size", type=(float,float), default=(10,8))
 @click.option("--colormap", type=str)
 @click.option("--lowpass-plot", type=bool, default=False, is_flag=True)
 @click.option("--labels", type=str, default='legend')
@@ -26,7 +27,7 @@ script_name = os.path.basename(__file__)
 @click.option("--reduce", type=str, default=None)
 @click.option("--distance", type=bool, default=False, is_flag=True)
 @click.option("--verbose", "-v", type=bool, default=False, is_flag=True)
-def main(state_path, state_namespace, state_namespace_pattern, populations, max_units, gid, t_variable, state_variable, t_max, t_min, font_size, colormap, lowpass_plot, labels, n_trials, query, reduce, distance, verbose):
+def main(state_path, state_namespace, state_namespace_pattern, populations, max_units, gid, t_variable, state_variable, t_max, t_min, font_size, fig_size, colormap, lowpass_plot, labels, n_trials, query, reduce, distance, verbose):
 
     utils.config_logging(verbose)
     logger = utils.get_script_logger(script_name)
@@ -77,12 +78,13 @@ def main(state_path, state_namespace, state_namespace_pattern, populations, max_
     kwargs = {}
     if colormap is not None:
         kwargs['colormap'] = colormap
-        
+
     plot.plot_intracellular_state (state_path, state_namespaces, include=populations, time_range=time_range,
                                    time_variable=t_variable, state_variable=state_variable, lowpass_plot=lowpass_plot,
                                    max_units=max_units, gid_set=gid, n_trials=n_trials, reduce=reduce,
-                                   distance=distance, labels=labels,
-                                   fontSize=font_size, saveFig=True, **kwargs)
+                                   distance=distance, labels=labels, 
+                                   fontSize=font_size, saveFig=True,
+                                   figSize=fig_size, **kwargs)
 
 
     

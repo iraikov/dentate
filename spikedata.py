@@ -19,7 +19,7 @@ default_pf_analysis_options = Struct(**{'Minimum Width': 10.,
 
 def get_env_spike_dict(env, include_artificial=True):
     """
-    Constructs  a dictionary with per-gid per-trial spike times from the output vectors with spike times and gids contained in env.
+    Constructs a dictionary with per-gid per-trial spike times from the output vectors with spike times and gids contained in env.
     """
     equilibration_duration = float(env.stimulus_config['Equilibration Duration'])
     n_trials = env.n_trials
@@ -320,6 +320,8 @@ def spike_density_estimate(population, spkdict, time_bins, arena_id=None, trajec
     t_start = time_bins[0]
     t_stop = time_bins[-1]
 
+    logger.info(f"t_start: {t_start} t_stop: {t_stop}")
+    
     spktrains = {ind: make_spktrain(lst, t_start, t_stop) for (ind, lst) in viewitems(spkdict)}
     baks_args = dict()
     baks_args['a'] = analysis_options['BAKS Alpha']

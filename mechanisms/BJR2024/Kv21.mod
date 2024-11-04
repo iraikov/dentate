@@ -10,6 +10,7 @@ NEURON	{
 	SUFFIX Kv21
 	USEION k READ ek WRITE ik
 	RANGE gbar, g, ik 
+        GLOBAL vshift
 }
 
 UNITS	{
@@ -19,7 +20,8 @@ UNITS	{
 }
 
 PARAMETER	{
-	gbar = 0.00001 (S/cm2) 
+	gbar = 0.00001 (S/cm2)
+        vshift = 0 (mV)
 }
 
 ASSIGNED	{
@@ -45,18 +47,18 @@ BREAKPOINT	{
 }
 
 DERIVATIVE states	{
-	rates()
+	rates(v - vshift)
 	m' = (mInf-m)/mTau
 	h' = (hInf-h)/hTau
 }
 
 INITIAL{
-	rates()
+	rates(v)
 	m = mInf
 	h = hInf
 }
 
-PROCEDURE rates(){
+PROCEDURE rates(v){
 	UNITSOFF 
 		mInf = 1/(1+exp(((v -(-9.200))/(-6.600)))) 
 		mTau = 100.000/(1+exp(((v -(-46.560))/(44.140)))) 

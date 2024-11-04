@@ -33,13 +33,15 @@ context = Context()
 @click.option("--t-max", type=float)
 @click.option("--t-min", type=float)
 @click.option("--font-size", type=float, default=14)
+@click.option("--fig-size", type=(float,float), default=(10,8))
 @click.option("--line-width", type=int, default=1)
 @click.option("--verbose", "-v", is_flag=True)
 def main(config_file, config_prefix, input_path, spike_namespace, state_namespace, populations, include_artificial,
          target_input_features_path, target_input_features_namespace,
          target_input_features_arena_id, target_input_features_trajectory_id,
          gid, n_trials, spike_hist_bin, all_spike_hist,
-         labels, lowpass_plot_type, legend, state_variable, t_variable, t_max, t_min, font_size, line_width, verbose):
+         labels, lowpass_plot_type, legend, state_variable, t_variable, t_max, t_min, font_size, fig_size, line_width,
+         verbose):
 
     utils.config_logging(verbose)
     
@@ -63,8 +65,8 @@ def main(config_file, config_prefix, input_path, spike_namespace, state_namespac
                             include=populations, include_artificial=include_artificial,
                             time_range=time_range, time_variable=t_variable, intracellular_variable=state_variable,
                             all_spike_hist=all_spike_hist, spike_hist_bin=spike_hist_bin, labels=labels, 
-                            lowpass_plot_type=lowpass_plot_type, n_trials=n_trials, fontSize=font_size, legend=legend, 
-                            saveFig=True, lw=line_width)
+                            lowpass_plot_type=lowpass_plot_type, n_trials=n_trials, fontSize=font_size,
+                            saveFig=True, lw=line_width, figSize=fig_size)
 
     if is_interactive:
         context.update(locals())

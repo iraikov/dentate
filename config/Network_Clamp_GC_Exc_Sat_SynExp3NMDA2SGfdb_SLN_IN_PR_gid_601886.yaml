@@ -5,8 +5,8 @@ Definitions: !include Definitions.yaml
 Global Parameters: !include Global.yaml
 Geometry: !include Geometry.yaml
 Random Seeds: !include Random.yaml
-Cell Data: data_601886_cls_20240719.h5
-Connection Data: data_601886_cls_20240719.h5
+Cell Data: data_601886_cls_100_20241028.h5
+Connection Data: data_601886_cls_100_20241028.h5
 #Cell Data: dentatenet_Slice_SLN_center_pf_20230315.h5
 #Connection Data: dentatenet_Slice_SLN_center_pf_20230315.h5
 #Gap Junction Data: DG_gapjunctions_20191112.h5
@@ -18,7 +18,7 @@ Analysis: !include Analysis_Configuration.yaml
 Cell Types:
   GC:
     template: DGC
-    template file: DGC_Template_AHR.hoc
+    template file: DGC_Template_BJR.hoc
     mechanism file: DG_GC_SynExp3NMDA2SGfdb_gid_601886_mech.yaml
     synapses:
       correct_for_spines: True

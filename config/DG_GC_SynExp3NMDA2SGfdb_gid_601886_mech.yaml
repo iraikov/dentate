@@ -4,18 +4,22 @@ params:
   nao0: 145
   ko0: 4
   Ra_dend: 200
-  Ra_axon: 110
+  Ra_axon: 100
   cm0: 1
   v_init: -80.0
   
-  apical_gbar_Na: 0.05
-  apical_initial_gmax_KA: 0.001
+  apical_gbar_Na: 0.04
+  apical_initial_gmax_KA: 0.002
   apical_gmax_KA_scale: -0.02
   apical_gmax_KA_shift: 70
-  apical_gbar_fKDR: 0.0002
+  apical_initial_gmax_HCN: 0.001
+  apical_gmax_HCN_scale: -0.02
+  apical_gmax_HCN_shift: 100
+  apical_gbar_fKDR: 0.0004
+  apical_gbar_SK2: 0.004
   apical_gkbar_Kir: 0.001
 
-  prox_gbar_Na: 0.05
+  prox_gbar_Na: 0.1
   prox_gbar_fKDR: 0.002
   
   prox_gtcabar_Ca: 0.0012
@@ -23,7 +27,7 @@ params:
   prox_glcabar_Ca: 0.0060
 
   prox_gbar_BK: 0.009
-  prox_gbar_Kv723: 0.001
+  prox_gbar_Kv723: 0.0005
   
   hillock_gbar_Na: 0.1 #0.009
   hillock_gmax_KA: 0.001
@@ -31,9 +35,11 @@ params:
 
   ais_gbar_Na: 0.4
   ais_gmax_KA: 0.002
-  ais_gbar_fKDR: 0.002
-  
-  axon_gbar_scale: 0.25
+  ais_gbar_fKDR: 0.003
+
+  axon_gbar_scale: 0.05
+  axon_gmax_KDR_scale: -0.04
+  axon_gmax_KDR_shift: 100
   
   prox_tau_Ca: 15.0
     
@@ -49,6 +55,29 @@ spike detector:
   
 apical:
   synapses:
+    
+    GABA_A:
+      # GABA_A erev mimicking Cl erev:
+      # https://doi.org/10.1038/s41467-019-13533-3
+      e:
+      - filters:
+          syn_types: [inhibitory]
+        origin: soma
+        slope: -2.0
+        tau: 200.0
+        value: -77.0
+    GABA_B:
+      g_unit:
+        - filters:
+            layers: [MML]
+            syn_types:
+            - inhibitory
+          value: 0.001
+        - filters:
+            layers: [OML]
+            syn_types:
+            - excitatory
+          value: 0.001
     AMPA:
       g_unit:
 #      - filters:
@@ -58,16 +87,14 @@ apical:
       - filters:
           syn_types: [excitatory]
         origin: soma
-        slope: 1.0e-3
+        slope: 1.0e-4
         tau: 300.0
-        value: 0.0003
+        value: 0.0002
     NMDA:
       g_unit:
         filters:
           syn_types: [excitatory]
-        value: 0.024
-        #slope: 1.0e-2
-        #tau: 300.0
+        value: 0.025
         origin: soma
       gVI:
         filters:
@@ -92,7 +119,7 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: -0.12
+        value: -0.11
       tau_D1:
         - filters:
             layers: [MML, OML]
@@ -129,19 +156,19 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 300.0
+        value: 200.0
       Ginc:
         filters:
           syn_types:
           - excitatory
-        value: 0.125
+        value: 0.1 #0.125
       Gmax:
         filters:
           syn_types:
           - excitatory
-        value: 700.0
+        value: 750.0 # 750
       tau_Gact:
         filters:
           syn_types:
           - excitatory
-        value: 500.0
+        value: 1000.0

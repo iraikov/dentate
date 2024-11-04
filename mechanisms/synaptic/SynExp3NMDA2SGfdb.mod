@@ -41,11 +41,11 @@ that the peak is 1.  Then the synaptic weight determines the maximum synaptic co
 Because the solution is a sum of exponentials, the
 coupled equations can be solved as a pair of independent equations
 by the more efficient cnexp method. 
-
 ENDCOMMENT
 
 NEURON {
 	POINT_PROCESS Exp3NMDA2SGfdb
+	USEION ca READ eca WRITE ica
 	NONSPECIFIC_CURRENT i
 	RANGE tau1_0, a1, b1, tau2_0, sc2, sh2, tauV, e, i, gVI, st_gVD, v0_gVD, Mg, K0, delta
         RANGE tau_D1, delta_D1, tau_F, delta_F
@@ -67,7 +67,11 @@ UNITS {
 
 PARAMETER {
     : Parameters Control Neurotransmitter and Voltage-dependent gating of NMDAR
-    
+
+    : calcium current parameters
+    pf = 0.03  (1)      : 0.03 adjusted to give 15% ica at -60 mV
+
+
     : short term facilitation parameters
     tau_F = 50 (ms) < 1e-9, 1e9 >
     delta_F = 0.9 (1) < 0, 1e9 >
@@ -124,7 +128,9 @@ CONSTANT {
 
 ASSIGNED {
 	v		(mV)
+	eca		(mV)
 	i		(nA)
+	ica		(nA)
 	g		(uS)
 	factor
         Gfactor
@@ -165,10 +171,13 @@ INITIAL {
 
 }
 
-BREAKPOINT { LOCAL m
+BREAKPOINT { LOCAL m, g
 	SOLVE state METHOD derivimplicit
 
-	i = (B - A)*(gVI + gVD)*(v - e)
+        g = (B - A)*(gVI + gVD)
+	i = g*(v - e)*(1 - pf)
+       	ica = g*(v - eca)*pf
+
 }
 
 DERIVATIVE state { LOCAL x

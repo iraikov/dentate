@@ -3102,6 +3102,7 @@ def plot_network_clamp(input_path, spike_namespace, intracellular_namespace, gid
     if time_range[0] == time_range[1] or time_range[0] == float('inf') or time_range[1] == float('inf'):
         raise RuntimeError('plot_network_clamp: invalid time_range: %s' % time_range)
     time_bins  = np.arange(time_range[0], time_range[1], spike_hist_bin)
+    spk_density_time_bins  = np.arange(max(0., time_range[0]), time_range[1], spike_hist_bin)
 
     baks_config = copy.copy(kwargs)
     target_rate = None
@@ -3116,7 +3117,7 @@ def plot_network_clamp(input_path, spike_namespace, intracellular_namespace, gid
     
         if env.analysis_config is not None:
             baks_config.update(env.analysis_config['Firing Rate Inference'])
-
+            
         target_trj_rate_maps = stimulus.rate_maps_from_features(env, state_pop_name,
                                                                 cell_index_set=[gid],
                                                                 input_features_path=target_input_features_path, 
@@ -3270,7 +3271,7 @@ def plot_network_clamp(input_path, spike_namespace, intracellular_namespace, gid
             spk_count += len(spk_inds)
             if target_rate_ip is not None:
                 sdf_dict = spikedata.spike_density_estimate(state_pop_name, { gid: this_trial_spkts[spk_inds] },
-                                                            time_bins, **baks_config)
+                                                            spk_density_time_bins, **baks_config)
                 trial_sdf_rate = sdf_dict[gid]['rate']
                 trial_sdf_time = sdf_dict[gid]['time']
                 trial_sdf_ip = interpolate.Akima1DInterpolator(trial_sdf_time, trial_sdf_rate)
